@@ -1,10 +1,24 @@
-EVOLUA ONE v0.1.1 - PUBLICAÇÃO
+EVOLUA ONE v0.2.0
 
-1. Execute database/EVOLUA_ONE_V0.1.sql no SQL Editor do NOVO Supabase.
-2. Em Supabase > Authentication > Users, crie o PRIMEIRO usuário administrador/proprietário.
-3. No GitHub, repositório evolua-one, envie TODO o conteúdo desta pasta para a raiz.
-4. Em Settings > Pages, publique a branch main pela pasta /(root).
-5. Abra o endereço do GitHub Pages e faça login com o primeiro usuário criado.
-6. No primeiro login, o sistema cria automaticamente o workspace Evolua One e define esse usuário como Proprietário.
+ETAPA 1 - SUPABASE
+1. Abra SQL Editor > New query.
+2. Execute o arquivo database/EVOLUA_ONE_V0.2_MIGRACAO.sql inteiro.
+3. Aguarde: Success. No rows returned.
 
-IMPORTANTE: não crie outros usuários diretamente antes de implementarmos o convite do sistema, pois eles precisam ser vinculados ao mesmo workspace.
+ETAPA 2 - GITHUB
+1. Abra o repositório evolua-one.
+2. Substitua os arquivos atuais pelos arquivos desta versão, mantendo as pastas.
+3. Faça Commit changes.
+4. Aguarde o GitHub Pages publicar.
+5. Abra o sistema e pressione Ctrl + F5.
+
+TESTE RÁPIDO
+- Financeiro > cadastre uma conta ou caixa.
+- Agenda > crie uma tarefa.
+- Contratos > abra ou crie um contrato ativo e use Parcelas.
+- Financeiro > confira as parcelas geradas.
+- Administração > Fazer backup agora.
+
+USUÁRIOS
+Para criar um novo login, crie primeiro em Supabase > Authentication > Users.
+Depois use Administração no Evolua One para vincular o e-mail e escolher o nível de acesso.

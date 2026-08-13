@@ -1,25 +1,29 @@
-# Evolua One
+# Evolua One v0.2.0
 
 Sistema integrado de gestão da Evolua.
 
-## Versão
-0.1.1 - fundação para banco Supabase novo.
+## O que já funciona
+- Desktop com janelas e wallpaper institucional.
+- Cadastros de alunos, responsáveis, empresas, cursos, pacotes, planos e serviços.
+- Comercial integrado ao CRM atual.
+- Gestão do aluno com contratos, status e histórico de atendimento.
+- Geração de ficha contratual para impressão/PDF.
+- Geração automática das parcelas do contrato.
+- Financeiro com contas a receber, recebimentos, contas a pagar, pagamentos e contas/caixas.
+- Agenda e tarefas, prioridades, responsáveis e aniversariantes.
+- Central de documentos com links do Google Drive.
+- Relatórios executivos, CSV e impressão.
+- Usuários e níveis de acesso para usuários já existentes no Supabase Auth.
+- Backup JSON do sistema com seletor do Windows.
 
-## Nesta fase
-- Desktop em janelas estilo Windows
-- Login Supabase Auth
-- Workspace e perfis
-- Cadastros de alunos, responsáveis e empresas
-- Cursos, pacotes, planos e serviços
-- Fotos em Storage privado
-- CPF/CNPJ com validação e prevenção de duplicidade
-- CEP com cidade/UF
-- Gestão inicial de contratos
-- Histórico de status contratual
-- Auditoria básica de alterações
-- Aniversariantes
-- CRM atual aberto como módulo Comercial integrado
-- Estruturas reservadas para Financeiro, Agenda, Documentos, Relatórios e Backup
+## Atualização do banco
+Execute antes de publicar esta versão:
 
-## Segurança
-A chave publicada no frontend é a Publishable Key do Supabase. O acesso real aos dados é protegido por autenticação e RLS. Nunca coloque Secret Key ou service_role neste repositório.
+`database/EVOLUA_ONE_V0.2_MIGRACAO.sql`
+
+A migração é incremental e não apaga cadastros existentes.
+
+## Backup recomendado
+`D:\Documentos Marcos\EvoluaOne\01_Backups_do_Sistema`
+
+A pasta já sincronizada pelo Google Drive mantém uma cópia no HD e outra na nuvem.
