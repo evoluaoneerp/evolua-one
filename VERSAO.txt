@@ -1,3 +1,3 @@
-Evolua One v0.2.2
+Evolua One v0.3.0
 Build: 2026-08-13
-Wallpaper oficial integrado + cache busting + módulos V0.2 funcionais.
+Arquitetura Integrada: Secretaria → Matrícula → Contrato → Financeiro + Prontuário Único.

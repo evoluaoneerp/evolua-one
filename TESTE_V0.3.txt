@@ -1,0 +1,32 @@
+EVOLUA ONE v0.3.0 - TESTE RÁPIDO
+
+1. Login
+   - Deve aparecer BUILD v0.3.0.
+   - O wallpaper oficial deve aparecer ao fundo.
+
+2. Secretaria > Alunos
+   - Cadastre ou abra um aluno.
+   - A lista deve mostrar o botão Prontuário.
+
+3. Prontuário
+   - Abra o aluno.
+   - Teste as abas Resumo, Matrículas, Contratos, Financeiro, Atendimentos, Responsáveis, Documentos e Linha do tempo.
+
+4. Matrícula
+   - Crie uma matrícula selecionando aluno + produto.
+   - Use Salvar e avançar para contrato.
+
+5. Contrato
+   - A matrícula deve preencher automaticamente aluno e produto.
+   - Defina valores e status Ativo.
+   - Ao salvar, as parcelas devem ser geradas no Financeiro.
+
+6. Financeiro
+   - Abra a conta a receber criada.
+   - Registre um recebimento.
+   - Volte ao prontuário e confira a aba Financeiro / Linha do tempo.
+
+7. Responsáveis
+   - No prontuário, vincule um responsável ao aluno.
+
+Se algo falhar, envie um print da tela e a mensagem exibida no canto.

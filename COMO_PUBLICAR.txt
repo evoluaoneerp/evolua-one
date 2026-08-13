@@ -1,24 +1,9 @@
-EVOLUA ONE v0.2.0
+EVOLUA ONE v0.3.0
 
-ETAPA 1 - SUPABASE
-1. Abra SQL Editor > New query.
-2. Execute o arquivo database/EVOLUA_ONE_V0.2_MIGRACAO.sql inteiro.
-3. Aguarde: Success. No rows returned.
-
-ETAPA 2 - GITHUB
-1. Abra o repositório evolua-one.
-2. Substitua os arquivos atuais pelos arquivos desta versão, mantendo as pastas.
-3. Faça Commit changes.
-4. Aguarde o GitHub Pages publicar.
-5. Abra o sistema e pressione Ctrl + F5.
-
-TESTE RÁPIDO
-- Financeiro > cadastre uma conta ou caixa.
-- Agenda > crie uma tarefa.
-- Contratos > abra ou crie um contrato ativo e use Parcelas.
-- Financeiro > confira as parcelas geradas.
-- Administração > Fazer backup agora.
-
-USUÁRIOS
-Para criar um novo login, crie primeiro em Supabase > Authentication > Users.
-Depois use Administração no Evolua One para vincular o e-mail e escolher o nível de acesso.
+1. Rode primeiro database/EVOLUA_ONE_V0.3_ARQUITETURA_INTEGRADA.sql no SQL Editor do Supabase.
+2. Confirme: Success. No rows returned.
+3. Substitua TODOS os arquivos e pastas do repositório evolua-one pelos desta versão.
+4. Faça commit.
+5. Aguarde o GitHub Pages atualizar.
+6. Abra em janela anônima ou use Ctrl + Shift + R.
+7. O login deve mostrar BUILD v0.3.0.
