@@ -1,3 +1,2 @@
-Evolua One 0.1.0
-Fundação funcional
-Data: 12/08/2026
+Evolua One 0.1.1
+Fundação para Supabase novo e independente.

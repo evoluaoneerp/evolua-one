@@ -1,24 +1,10 @@
-EVOLUA ONE V0.1 - PUBLICAÇÃO
+EVOLUA ONE v0.1.1 - PUBLICAÇÃO
 
-1) SUPABASE
-- SQL Editor > New query
-- Cole TODO o conteúdo de database/EVOLUA_ONE_V0.1.sql
-- Clique em Run
-- O esperado é execução sem erro.
+1. Execute database/EVOLUA_ONE_V0.1.sql no SQL Editor do NOVO Supabase.
+2. Em Supabase > Authentication > Users, crie o PRIMEIRO usuário administrador/proprietário.
+3. No GitHub, repositório evolua-one, envie TODO o conteúdo desta pasta para a raiz.
+4. Em Settings > Pages, publique a branch main pela pasta /(root).
+5. Abra o endereço do GitHub Pages e faça login com o primeiro usuário criado.
+6. No primeiro login, o sistema cria automaticamente o workspace Evolua One e define esse usuário como Proprietário.
 
-2) GITHUB
-- Crie um repositório novo chamado evolua-one
-- Envie TODOS os arquivos e pastas deste pacote para a raiz
-- Settings > Pages
-- Deploy from a branch
-- Branch: main / root
-
-3) TESTE
-- Abra o Evolua One
-- Entre com o MESMO login do CRM
-- Abra Cadastros > Alunos
-- Cadastre um aluno teste
-- Teste "Salvar e avançar para contrato"
-- Abra Comercial e confirme que o CRM atual carrega dentro da janela
-
-NÃO APAGUE NEM ALTERE O REPOSITÓRIO DO CRM ATUAL.
+IMPORTANTE: não crie outros usuários diretamente antes de implementarmos o convite do sistema, pois eles precisam ser vinculados ao mesmo workspace.
