@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111018">
+  <title>Evolua One</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.0">
+</head>
+<body>
+  <div id="toast-container" class="toast-container"></div>
+
+  <section id="login-view" class="login-view">
+    <div class="login-glow glow-a"></div><div class="login-glow glow-b"></div>
+    <div class="login-card">
+      <div class="one-logo login-logo"><span>E</span><b>+</b></div>
+      <p class="eyebrow">EVOLUA ONE</p>
+      <h1>Sistema Integrado de Gestão</h1>
+      <p class="muted">Cadastros, comercial, contratos, financeiro e gestão em uma única área de trabalho.</p>
+      <form id="login-form" class="form-grid one-col">
+        <label><span>E-mail</span><input id="login-email" type="email" autocomplete="email" required></label>
+        <label><span>Senha</span><input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button id="login-button" class="btn primary" type="submit">Entrar no Evolua One</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="desktop-view" class="desktop-view hidden">
+    <header class="desktop-topbar">
+      <div class="top-brand"><div class="one-logo small"><span>E</span><b>+</b></div><div><strong>Evolua One</strong><small>Sistema Integrado de Gestão</small></div></div>
+      <div class="top-actions"><button id="refresh-button" class="icon-button" title="Atualizar">↻</button><div class="user-chip"><div><strong id="top-user-name">Usuário</strong><small id="top-user-role">Perfil</small></div><span class="avatar-dot">👤</span></div></div>
+    </header>
+
+    <main id="desktop-canvas" class="desktop-canvas">
+      <div class="desktop-watermark"><div class="one-logo giant"><span>E</span><b>+</b></div><h1>EVOLUA ONE</h1><p>Educação que transforma • Gestão que organiza</p></div>
+
+      <nav class="desktop-shortcuts" aria-label="Atalhos">
+        <button class="desktop-shortcut" style="--step:0" data-open-window="cadastros"><span>🗂️</span><b>Cadastros</b></button>
+        <button class="desktop-shortcut" style="--step:1" data-open-window="commercial"><span>🎯</span><b>Comercial</b></button>
+        <button class="desktop-shortcut" style="--step:2" data-open-window="contracts"><span>📄</span><b>Gestão do Aluno</b></button>
+        <button class="desktop-shortcut" style="--step:3" data-open-window="finance"><span>💰</span><b>Financeiro</b></button>
+        <button class="desktop-shortcut" style="--step:4" data-open-window="agenda"><span>🗓️</span><b>Agenda</b></button>
+        <button class="desktop-shortcut" style="--step:5" data-open-window="documents"><span>🗃️</span><b>Documentos</b></button>
+        <button class="desktop-shortcut" style="--step:6" data-open-window="reports"><span>📊</span><b>Relatórios</b></button>
+        <button class="desktop-shortcut" style="--step:7" data-open-window="admin"><span>⚙️</span><b>Administração</b></button>
+      </nav>
+
+      <aside class="desktop-widget">
+        <div class="widget-title"><span>Radar do dia</span><span class="live-dot"></span></div>
+        <div id="home-kpis" class="home-kpis"></div>
+        <div class="widget-section"><div class="section-title">🎂 Próximos aniversários</div><div id="birthday-list"></div></div>
+      </aside>
+
+      <!-- CADASTROS -->
+      <section class="app-window hidden-window" data-window="cadastros" style="left:12%;top:9%;width:760px;height:520px">
+        <div class="window-titlebar"><div><span>🗂️</span><strong>Cadastros</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body"><div class="module-intro"><p class="eyebrow">PORTA DE ENTRADA</p><h2>Central de Cadastros</h2><p>Cadastre pessoas, empresas, produtos e permissões. Tudo conversa com contratos e com o comercial.</p></div><div class="module-grid">
+          <button class="module-card" data-open-window="students"><span>👨‍🎓</span><strong>Alunos</strong><small>Dados pessoais, foto e contato</small></button>
+          <button class="module-card" data-open-window="guardians"><span>👨‍👩‍👧</span><strong>Pais e responsáveis</strong><small>Responsáveis legais e financeiros</small></button>
+          <button class="module-card" data-open-window="companies"><span>🏢</span><strong>Empresas</strong><small>CNPJ e clientes corporativos</small></button>
+          <button class="module-card" data-open-window="products"><span>📦</span><strong>Produtos e Planos</strong><small>Cursos, pacotes, planos e serviços</small></button>
+          <button class="module-card" data-open-window="admin"><span>🔐</span><strong>Usuários</strong><small>Níveis de acesso e status</small></button>
+          <button class="module-card" data-open-window="contracts"><span>📄</span><strong>Contratos</strong><small>Avançar para contratação</small></button>
+        </div></div>
+      </section>
+
+      <!-- ALUNOS -->
+      <section class="app-window hidden-window" data-window="students" style="left:8%;top:6%;width:1020px;height:700px">
+        <div class="window-titlebar"><div><span>👨‍🎓</span><strong>Alunos</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body split-window">
+          <div class="form-panel"><div class="panel-head"><div><p class="eyebrow">CADASTRO</p><h2 id="students-form-title">Novo aluno</h2></div><button class="btn ghost small" type="button" data-reset-form="students">Limpar</button></div>
+            <form id="students-form" class="form-grid">
+              <label class="photo-field full"><span>Foto</span><input id="student-photo" type="file" accept="image/*"></label>
+              <label class="full"><span>Nome completo *</span><input name="full_name" required></label>
+              <label><span>Como prefere ser chamado</span><input name="preferred_name"></label><label><span>Data de nascimento</span><input name="birth_date" type="date"></label>
+              <label><span>CPF</span><input name="cpf" data-mask="cpf" maxlength="14"></label><label><span>RG</span><input name="rg"></label>
+              <label><span>Órgão expedidor</span><input name="rg_issuer"></label><label><span>Status</span><select name="status"><option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="trancado">Trancado</option><option value="cancelado">Cancelado</option><option value="concluido">Concluído</option></select></label>
+              <label><span>Telefone</span><input name="phone" data-mask="phone"></label><label><span>WhatsApp</span><input name="whatsapp" data-mask="phone"></label>
+              <label class="full"><span>E-mail</span><input name="email" type="email"></label>
+              <label><span>CEP</span><input id="student-cep" name="cep" data-mask="cep" maxlength="9"></label><label><span>Cidade</span><input id="student-city" name="city"></label>
+              <label><span>Estado</span><input id="student-state" name="state" maxlength="2"></label><label><span>Rua</span><input name="street"></label>
+              <label><span>Número</span><input name="number"></label><label><span>Bairro</span><input name="neighborhood"></label>
+              <label class="full"><span>Complemento</span><input name="complement"></label><label class="full"><span>Ponto de referência</span><input name="reference_point"></label>
+              <label class="full"><span>Observações</span><textarea name="notes" rows="3"></textarea></label>
+              <div class="form-actions full"><button class="btn primary" type="submit">Salvar aluno</button><button id="student-save-contract" class="btn secondary" type="button">Salvar e avançar para contrato →</button></div>
+            </form>
+          </div><div class="list-panel"><div class="panel-head"><div><p class="eyebrow">BASE</p><h2>Alunos cadastrados</h2></div></div><div id="students-list"></div></div>
+        </div>
+      </section>
+
+      <!-- RESPONSÁVEIS -->
+      <section class="app-window hidden-window" data-window="guardians" style="left:10%;top:7%;width:1000px;height:680px">
+        <div class="window-titlebar"><div><span>👨‍👩‍👧</span><strong>Pais e responsáveis</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body split-window"><div class="form-panel"><div class="panel-head"><div><p class="eyebrow">CADASTRO</p><h2 id="guardians-form-title">Novo responsável</h2></div><button class="btn ghost small" type="button" data-reset-form="guardians">Limpar</button></div>
+          <form id="guardians-form" class="form-grid">
+            <label class="photo-field full"><span>Foto</span><input id="guardian-photo" type="file" accept="image/*"></label>
+            <label class="full"><span>Nome completo *</span><input name="full_name" required></label><label><span>Data de nascimento</span><input name="birth_date" type="date"></label><label><span>CPF</span><input name="cpf" data-mask="cpf"></label>
+            <label><span>RG</span><input name="rg"></label><label><span>Órgão expedidor</span><input name="rg_issuer"></label><label><span>Telefone</span><input name="phone" data-mask="phone"></label><label><span>WhatsApp</span><input name="whatsapp" data-mask="phone"></label>
+            <label class="full"><span>E-mail</span><input name="email" type="email"></label><label><span>Profissão</span><input name="profession"></label><label><span>Local de trabalho</span><input name="workplace"></label>
+            <label><span>CEP</span><input id="guardian-cep" name="cep" data-mask="cep"></label><label><span>Cidade</span><input id="guardian-city" name="city"></label><label><span>Estado</span><input id="guardian-state" name="state" maxlength="2"></label><label><span>Rua</span><input name="street"></label>
+            <label><span>Número</span><input name="number"></label><label><span>Bairro</span><input name="neighborhood"></label><label class="full"><span>Complemento</span><input name="complement"></label><label class="full"><span>Ponto de referência</span><input name="reference_point"></label>
+            <label class="switch-label full"><input name="active" type="checkbox" checked><span>Cadastro ativo</span></label><div class="form-actions full"><button class="btn primary">Salvar responsável</button></div>
+          </form></div><div class="list-panel"><div class="panel-head"><div><p class="eyebrow">BASE</p><h2>Responsáveis cadastrados</h2></div></div><div id="guardians-list"></div></div></div>
+      </section>
+
+      <!-- EMPRESAS -->
+      <section class="app-window hidden-window" data-window="companies" style="left:11%;top:8%;width:1000px;height:670px">
+        <div class="window-titlebar"><div><span>🏢</span><strong>Empresas</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body split-window"><div class="form-panel"><div class="panel-head"><div><p class="eyebrow">CADASTRO</p><h2 id="companies-form-title">Nova empresa</h2></div><button class="btn ghost small" type="button" data-reset-form="companies">Limpar</button></div>
+          <form id="companies-form" class="form-grid">
+            <label class="photo-field full"><span>Logo ou foto</span><input id="company-photo" type="file" accept="image/*"></label><label class="full"><span>Razão social *</span><input name="legal_name" required></label><label><span>Nome fantasia</span><input name="trade_name"></label><label><span>CNPJ</span><input name="cnpj" data-mask="cnpj"></label>
+            <label><span>Inscrição estadual</span><input name="state_registration"></label><label><span>Data de abertura</span><input name="opening_date" type="date"></label><label><span>Segmento</span><input name="segment"></label><label><span>Contato principal</span><input name="contact_name"></label>
+            <label><span>Cargo do contato</span><input name="contact_role"></label><label><span>Telefone</span><input name="phone" data-mask="phone"></label><label><span>WhatsApp</span><input name="whatsapp" data-mask="phone"></label><label><span>E-mail</span><input name="email" type="email"></label>
+            <label><span>CEP</span><input id="company-cep" name="cep" data-mask="cep"></label><label><span>Cidade</span><input id="company-city" name="city"></label><label><span>Estado</span><input id="company-state" name="state" maxlength="2"></label><label><span>Rua</span><input name="street"></label>
+            <label><span>Número</span><input name="number"></label><label><span>Bairro</span><input name="neighborhood"></label><label class="full"><span>Complemento</span><input name="complement"></label><label class="full"><span>Ponto de referência</span><input name="reference_point"></label>
+            <label class="switch-label full"><input name="active" type="checkbox" checked><span>Empresa ativa</span></label><div class="form-actions full"><button class="btn primary">Salvar empresa</button></div>
+          </form></div><div class="list-panel"><div class="panel-head"><div><p class="eyebrow">BASE</p><h2>Empresas cadastradas</h2></div></div><div id="companies-list"></div></div></div>
+      </section>
+
+      <!-- PRODUTOS -->
+      <section class="app-window hidden-window" data-window="products" style="left:14%;top:10%;width:940px;height:610px">
+        <div class="window-titlebar"><div><span>📦</span><strong>Produtos e Planos</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body split-window"><div class="form-panel"><div class="panel-head"><div><p class="eyebrow">CATÁLOGO</p><h2 id="products-form-title">Novo produto ou plano</h2></div><button class="btn ghost small" type="button" data-reset-form="products">Limpar</button></div>
+          <form id="products-form" class="form-grid"><label class="full"><span>Nome *</span><input name="name" required></label><label><span>Tipo</span><select name="product_type"><option value="curso">Curso avulso</option><option value="pacote">Pacote</option><option value="plano">Plano / assinatura</option><option value="servico">Serviço</option></select></label><label><span>Categoria</span><input name="category"></label>
+            <label><span>Modalidade</span><select name="modality"><option value="presencial">Presencial</option><option value="online">Online</option><option value="assinatura">Assinatura</option><option value="hibrido">Híbrido</option></select></label><label><span>Carga horária</span><input name="workload_hours" type="number" min="0"></label>
+            <label><span>Valor padrão</span><input name="list_price" type="number" min="0" step="0.01"></label><label><span>Taxa de matrícula</span><input name="enrollment_fee" type="number" min="0" step="0.01"></label><label><span>Máx. parcelas</span><input name="max_installments" type="number" min="1" value="1"></label><label><span>Validade / meses</span><input name="access_months" type="number" min="0"></label>
+            <label class="full"><span>Descrição</span><textarea name="description" rows="3"></textarea></label><label class="switch-label full"><input name="active" type="checkbox" checked><span>Disponível para novas vendas</span></label><div class="form-actions full"><button class="btn primary">Salvar produto</button></div></form></div><div class="list-panel"><div class="panel-head"><div><p class="eyebrow">CATÁLOGO</p><h2>Produtos cadastrados</h2></div></div><div id="products-list"></div></div></div>
+      </section>
+
+      <!-- CONTRATOS -->
+      <section class="app-window hidden-window" data-window="contracts" style="left:7%;top:5%;width:1100px;height:720px">
+        <div class="window-titlebar"><div><span>📄</span><strong>Gestão do Aluno e Contratos</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body split-window contracts-layout"><div class="form-panel"><div class="panel-head"><div><p class="eyebrow">CONTRATAÇÃO</p><h2 id="contracts-form-title">Novo contrato</h2></div><button class="btn ghost small" type="button" data-reset-form="contracts">Limpar</button></div>
+          <form id="contracts-form" class="form-grid"><label><span>Nº do contrato</span><input id="contract-number" name="contract_number"></label><label><span>Data</span><input id="contract-date" name="contract_date" type="date"></label><label class="full"><span>Aluno</span><select id="contract-student-id" name="student_id"></select></label><label><span>Responsável</span><select id="contract-guardian-id" name="guardian_id"></select></label><label><span>Empresa</span><select id="contract-company-id" name="company_id"></select></label>
+            <label class="full"><span>Produto / plano *</span><select id="contract-product-id" name="product_id" required></select></label><label><span>Status</span><select name="status"><option value="rascunho">Rascunho</option><option value="aguardando_assinatura">Aguardando assinatura</option><option value="ativo">Ativo</option><option value="trancado">Trancado</option><option value="cancelado">Cancelado</option><option value="concluido">Concluído</option></select></label><label><span>Vencimento / dia</span><input name="due_day" type="number" min="1" max="31"></label>
+            <label><span>Valor contratado</span><input id="contract-value" name="contract_value" type="number" min="0" step="0.01"></label><label><span>Matrícula</span><input id="contract-enrollment-fee" name="enrollment_fee" type="number" min="0" step="0.01"></label><label><span>Parcelas</span><input id="contract-installments" name="installments" type="number" min="1" value="1"></label><label><span>Valor da parcela</span><input id="contract-installment-value" name="installment_value" type="number" min="0" step="0.01"></label>
+            <label><span>Início</span><input name="start_date" type="date"></label><label><span>Término previsto</span><input name="end_date" type="date"></label><label class="full"><span>Observações</span><textarea name="notes" rows="3"></textarea></label><div class="form-actions full"><button class="btn primary">Salvar contrato</button><button class="btn secondary" type="button" disabled title="Entrará na etapa dos modelos contratuais">Gerar PDF • próxima etapa</button></div></form></div><div class="list-panel"><div class="panel-head"><div><p class="eyebrow">HISTÓRICO</p><h2>Contratos</h2></div></div><div id="contracts-list"></div></div></div>
+      </section>
+
+      <!-- COMERCIAL -->
+      <section class="app-window hidden-window" data-window="commercial" style="left:4%;top:4%;width:1180px;height:760px">
+        <div class="window-titlebar"><div><span>🎯</span><strong>Comercial • CRM atual integrado</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div>
+        <div class="window-body iframe-body"><div class="iframe-toolbar"><span>O CRM atual continua intacto e usa o mesmo Supabase.</span><a id="open-crm-new-tab" class="btn secondary small" target="_blank">Abrir em nova aba</a></div><iframe id="commercial-frame" title="Evolua CRM Comercial"></iframe></div>
+      </section>
+
+      <!-- PLACEHOLDERS -->
+      <section class="app-window hidden-window" data-window="finance" style="left:18%;top:12%;width:760px;height:500px"><div class="window-titlebar"><div><span>💰</span><strong>Financeiro</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div><div class="window-body construction"><span>💰</span><h2>Financeiro completo</h2><p>Contas a receber e pagar, caixa, fluxo de caixa, renegociações, categorias e relatórios serão construídos sobre os contratos desta base.</p><div class="phase-tag">PRÓXIMA FASE</div></div></section>
+      <section class="app-window hidden-window" data-window="agenda" style="left:20%;top:14%;width:720px;height:480px"><div class="window-titlebar"><div><span>🗓️</span><strong>Agenda e Tarefas</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div><div class="window-body construction"><span>🗓️</span><h2>Central de pendências</h2><p>Follow-ups, cobranças, retornos, contratos, aniversários e tarefas da equipe serão consolidados aqui.</p><div class="phase-tag">ESTRUTURA RESERVADA</div></div></section>
+      <section class="app-window hidden-window" data-window="documents" style="left:22%;top:16%;width:700px;height:460px"><div class="window-titlebar"><div><span>🗃️</span><strong>Documentos</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div><div class="window-body construction"><span>🗃️</span><h2>Central de documentos</h2><p>Contratos, comprovantes, documentos pessoais e integração com Google Drive entrarão nesta janela.</p><div class="phase-tag">ESTRUTURA RESERVADA</div></div></section>
+      <section class="app-window hidden-window" data-window="reports" style="left:24%;top:18%;width:700px;height:460px"><div class="window-titlebar"><div><span>📊</span><strong>Relatórios</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div><div class="window-body construction"><span>📊</span><h2>Indicadores Evolua One</h2><p>Comercial, contratos, alunos, financeiro e gestão serão consolidados aqui com exportação para PDF e Excel.</p><div class="phase-tag">ESTRUTURA RESERVADA</div></div></section>
+
+      <!-- ADMIN -->
+      <section class="app-window hidden-window" data-window="admin" style="left:15%;top:10%;width:840px;height:560px"><div class="window-titlebar"><div><span>⚙️</span><strong>Administração</strong></div><div class="window-controls"><button data-window-minimize>─</button><button data-window-maximize>□</button><button data-window-close>×</button></div></div><div class="window-body"><div class="panel-head"><div><p class="eyebrow">SEGURANÇA</p><h2>Usuários e permissões</h2><p class="muted">A primeira versão gerencia os usuários já vinculados ao workspace. O convite seguro será feito por função protegida do Supabase na próxima etapa.</p></div><button id="new-user-invite" class="btn primary">+ Novo usuário</button></div><div id="users-list" class="members-list"></div><div class="admin-foot"><strong>Backup oficial</strong><code>D:\Documentos Marcos\EvoluaOne</code><small>Integração com a pasta sincronizada do Google Drive entra no módulo Segurança e Backups.</small></div></div></section>
+    </main>
+
+    <div id="start-menu" class="start-menu hidden"><div class="start-head"><div class="one-logo small"><span>E</span><b>+</b></div><div><strong>Central Evolua</strong><small>Abra um módulo</small></div></div><div class="start-grid">
+      <button data-open-window="cadastros">🗂️ Cadastros</button><button data-open-window="commercial">🎯 Comercial</button><button data-open-window="contracts">📄 Gestão do Aluno</button><button data-open-window="finance">💰 Financeiro</button><button data-open-window="agenda">🗓️ Agenda</button><button data-open-window="documents">🗃️ Documentos</button><button data-open-window="reports">📊 Relatórios</button><button data-open-window="admin">⚙️ Administração</button>
+    </div><button id="logout-button" class="logout-menu">⏻ Sair do sistema</button></div>
+
+    <footer class="taskbar"><button id="start-button" class="start-button"><span class="one-logo micro"><span>E</span><b>+</b></span><b>Iniciar</b></button><div id="taskbar-apps" class="taskbar-apps"></div><div class="taskbar-tray"><button class="tray-notifications" data-open-window="agenda">🔔<span id="notification-count" class="tray-badge hidden">0</span></button><div class="clock"><strong id="clock-time">00:00</strong><small id="clock-date">00/00/0000</small></div><small id="version-label">v0.1.0</small></div></footer>
+  </section>
+  <script type="module" src="js/app.js?v=0.1.0"></script>
+</body>
+</html>

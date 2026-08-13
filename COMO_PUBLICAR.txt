@@ -1,0 +1,24 @@
+EVOLUA ONE V0.1 - PUBLICAÇÃO
+
+1) SUPABASE
+- SQL Editor > New query
+- Cole TODO o conteúdo de database/EVOLUA_ONE_V0.1.sql
+- Clique em Run
+- O esperado é execução sem erro.
+
+2) GITHUB
+- Crie um repositório novo chamado evolua-one
+- Envie TODOS os arquivos e pastas deste pacote para a raiz
+- Settings > Pages
+- Deploy from a branch
+- Branch: main / root
+
+3) TESTE
+- Abra o Evolua One
+- Entre com o MESMO login do CRM
+- Abra Cadastros > Alunos
+- Cadastre um aluno teste
+- Teste "Salvar e avançar para contrato"
+- Abra Comercial e confirme que o CRM atual carrega dentro da janela
+
+NÃO APAGUE NEM ALTERE O REPOSITÓRIO DO CRM ATUAL.
