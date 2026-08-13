@@ -15,7 +15,7 @@ const state = {
   desktop: null
 };
 
-const roleLabels = { owner: 'Proprietário', admin: 'Administrador', seller: 'Comercial', viewer: 'Consulta' };
+const roleLabels = { owner: 'Proprietário', admin: 'Administrador', commercial: 'Comercial', financial: 'Financeiro', reception: 'Recepção', student_management: 'Gestão do Aluno', viewer: 'Consulta' };
 const statusLabels = { ativo: 'Ativo', inativo: 'Inativo', trancado: 'Trancado', cancelado: 'Cancelado', concluido: 'Concluído' };
 const productTypes = { curso: 'Curso avulso', pacote: 'Pacote', plano: 'Plano / assinatura', servico: 'Serviço' };
 const contractStatus = { rascunho:'Rascunho', aguardando_assinatura:'Aguardando assinatura', ativo:'Ativo', trancado:'Trancado', cancelado:'Cancelado', concluido:'Concluído', substituido:'Substituído' };
