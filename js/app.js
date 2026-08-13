@@ -3,410 +3,96 @@ import { one } from './services.js';
 import { DesktopManager } from './desktop.js';
 import { APP_NAME, CRM_URL, VERSION } from './config.js';
 
-const $ = selector => document.querySelector(selector);
-const $$ = selector => [...document.querySelectorAll(selector)];
-const state = {
-  user: null,
-  profile: null,
-  role: null,
-  workspaceId: null,
-  students: [], guardians: [], companies: [], products: [], contracts: [], members: [],
-  editing: { students: null, guardians: null, companies: null, products: null, contracts: null },
-  desktop: null
-};
-
-const roleLabels = { owner: 'Proprietário', admin: 'Administrador', commercial: 'Comercial', financial: 'Financeiro', reception: 'Recepção', student_management: 'Gestão do Aluno', viewer: 'Consulta' };
-const statusLabels = { ativo: 'Ativo', inativo: 'Inativo', trancado: 'Trancado', cancelado: 'Cancelado', concluido: 'Concluído' };
-const productTypes = { curso: 'Curso avulso', pacote: 'Pacote', plano: 'Plano / assinatura', servico: 'Serviço' };
-const contractStatus = { rascunho:'Rascunho', aguardando_assinatura:'Aguardando assinatura', ativo:'Ativo', trancado:'Trancado', cancelado:'Cancelado', concluido:'Concluído', substituido:'Substituído' };
-
-function toast(message, type = 'success') {
-  const node = document.createElement('div');
-  node.className = `toast ${type}`;
-  node.textContent = message;
-  $('#toast-container').appendChild(node);
-  setTimeout(() => node.remove(), 4200);
-}
-
-function escapeHTML(value = '') {
-  return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
-}
-function digits(value = '') { return String(value).replace(/\D/g, ''); }
-function formatCPF(value = '') {
-  const v = digits(value).slice(0,11);
-  return v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-}
-function formatCNPJ(value = '') {
-  const v = digits(value).slice(0,14);
-  return v.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2');
-}
-function formatCEP(value = '') { const v = digits(value).slice(0,8); return v.replace(/(\d{5})(\d)/, '$1-$2'); }
-function formatPhone(value = '') {
-  const v = digits(value).slice(0,11);
-  if (v.length <= 10) return v.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
-  return v.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
-}
-function money(value) { return Number(value || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
-function fmtDate(value) { if (!value) return '—'; return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR'); }
-function isAdmin() { return ['owner','admin'].includes(state.role); }
-
-function validCPF(value) {
-  const cpf = digits(value);
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
-  let sum = 0;
-  for (let i=0;i<9;i++) sum += Number(cpf[i]) * (10-i);
-  let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
-  if (d1 !== Number(cpf[9])) return false;
-  sum = 0;
-  for (let i=0;i<10;i++) sum += Number(cpf[i]) * (11-i);
-  let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
-  return d2 === Number(cpf[10]);
-}
-function validCNPJ(value) {
-  const cnpj = digits(value);
-  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
-  const calc = len => {
-    let size = len - 7, sum = 0;
-    for (let i=0;i<len;i++) { sum += Number(cnpj[i]) * size--; if (size < 2) size = 9; }
-    const result = sum % 11; return result < 2 ? 0 : 11 - result;
-  };
-  return calc(12) === Number(cnpj[12]) && calc(13) === Number(cnpj[13]);
-}
-
-async function fetchCEP(input, cityTarget, stateTarget) {
-  const cep = digits(input.value);
-  if (cep.length !== 8) return;
-  try {
-    const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    if (!response.ok) throw new Error('CEP indisponível');
-    const data = await response.json();
-    if (data.erro) throw new Error('CEP não encontrado');
-    $(cityTarget).value = data.localidade || '';
-    $(stateTarget).value = data.uf || '';
-    toast(`Cidade localizada: ${data.localidade || ''}/${data.uf || ''}`);
-  } catch (error) {
-    toast('Não consegui localizar esse CEP agora. Preencha cidade e estado manualmente.', 'warning');
-  }
-}
-
-function showLogin() {
-  $('#login-view').classList.remove('hidden');
-  $('#desktop-view').classList.add('hidden');
-}
-function showDesktop() {
-  $('#login-view').classList.add('hidden');
-  $('#desktop-view').classList.remove('hidden');
-}
-
-async function enterApp(user) {
-  state.user = user;
-  try {
-    const boot = await one.bootstrap(user);
-    state.workspaceId = boot.workspaceId;
-    state.profile = boot.profile;
-    state.role = boot.membership?.role || 'viewer';
-    $('#top-user-name').textContent = state.profile?.full_name || user.email?.split('@')[0] || 'Usuário';
-    $('#top-user-role').textContent = roleLabels[state.role] || state.role;
-    $('#version-label').textContent = `v${VERSION}`;
-    showDesktop();
-    await refreshAll();
-  } catch (error) {
-    console.error(error);
-    toast(`Falha ao abrir o Evolua One: ${error.message}`, 'error');
-  }
-}
-
-async function refreshAll() {
-  const [students, guardians, companies, products, contracts, members] = await Promise.all([
-    one.list('one_students', 'full_name', true),
-    one.list('one_guardians', 'full_name', true),
-    one.list('one_companies', 'legal_name', true),
-    one.list('one_products', 'name', true),
-    one.contractsExpanded(),
-    one.listMembers()
-  ]);
-  const hydrate = async items => Promise.all(items.map(async item => ({ ...item, photo_url: item.photo_path ? await one.signedPhoto(item.photo_path) : null })));
-  const [studentsWithPhotos, guardiansWithPhotos, companiesWithPhotos] = await Promise.all([hydrate(students), hydrate(guardians), hydrate(companies)]);
-  Object.assign(state, { students: studentsWithPhotos, guardians: guardiansWithPhotos, companies: companiesWithPhotos, products, contracts, members });
-  renderEverything();
-}
-
-function renderEverything() {
-  renderHome(); renderStudents(); renderGuardians(); renderCompanies(); renderProducts(); renderContracts(); renderMembers(); updateSelects();
-  if (!state.editing.contracts && $('#contract-number')) $('#contract-number').value = nextContractNumber();
-}
-
-function upcomingBirthdays() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const items = [
-    ...state.students.filter(x => x.birth_date).map(x => ({ type:'Aluno', name:x.full_name, date:x.birth_date })),
-    ...state.guardians.filter(x => x.birth_date).map(x => ({ type:'Responsável', name:x.full_name, date:x.birth_date }))
-  ];
-  return items.map(item => {
-    const [y,m,d] = item.date.split('-').map(Number);
-    let next = new Date(today.getFullYear(), m-1, d);
-    if (next < today) next = new Date(today.getFullYear()+1, m-1, d);
-    return { ...item, next, days: Math.round((next-today)/86400000), age: today.getFullYear()-y + (next.getFullYear()>today.getFullYear() ? -1 : 0) };
-  }).filter(item => item.days <= 30).sort((a,b) => a.days-b.days);
-}
-
-function renderHome() {
-  const birthdays = upcomingBirthdays();
-  const today = birthdays.filter(item => item.days === 0);
-  $('#home-kpis').innerHTML = [
-    ['👨‍🎓','Alunos', state.students.filter(x=>x.status==='ativo').length, `${state.students.length} cadastrados`],
-    ['👨‍👩‍👧','Responsáveis', state.guardians.length, 'cadastros vinculáveis'],
-    ['🏢','Empresas', state.companies.filter(x=>x.active).length, `${state.companies.length} cadastradas`],
-    ['📄','Contratos ativos', state.contracts.filter(x=>x.status==='ativo').length, `${state.contracts.length} contratos`],
-    ['🎂','Aniversários hoje', today.length, birthdays.length ? `${birthdays.length} nos próximos 30 dias` : 'nenhum próximo']
-  ].map(([icon,label,value,sub]) => `<article class="home-kpi"><span>${icon}</span><div><small>${label}</small><strong>${value}</strong><em>${sub}</em></div></article>`).join('');
-
-  $('#birthday-list').innerHTML = birthdays.length ? birthdays.slice(0,8).map(item => `<div class="birthday-row"><span class="birthday-icon">🎂</span><div><strong>${escapeHTML(item.name)}</strong><small>${item.type} • ${item.days===0?'Hoje':item.days===1?'Amanhã':`em ${item.days} dias`}</small></div></div>`).join('') : '<div class="empty-state">Nenhum aniversário nos próximos 30 dias.</div>';
-  $('#notification-count').textContent = String(today.length);
-  $('#notification-count').classList.toggle('hidden', today.length === 0);
-}
-
-function entityTable({ rows, columns, table, empty = 'Nenhum cadastro encontrado.' }) {
-  if (!rows.length) return `<div class="empty-state">${empty}</div>`;
-  return `<div class="data-table-wrap"><table class="data-table"><thead><tr>${columns.map(c=>`<th>${c.label}</th>`).join('')}<th>Ações</th></tr></thead><tbody>${rows.map(row => `<tr>${columns.map(c=>`<td>${c.render ? c.render(row) : escapeHTML(row[c.key] ?? '—')}</td>`).join('')}<td class="row-actions"><button class="mini-btn" data-edit-${table}="${row.id}">Editar</button><button class="mini-btn danger" data-delete-${table}="${row.id}">Excluir</button></td></tr>`).join('')}</tbody></table></div>`;
-}
-
-function renderStudents() {
-  $('#students-list').innerHTML = entityTable({ table:'students', rows:state.students, columns:[
-    { label:'Aluno', render:r=>`<div class="entity-cell">${r.photo_url?`<img src="${escapeHTML(r.photo_url)}" alt="">`:'<span class="entity-avatar">👨‍🎓</span>'}<div><strong>${escapeHTML(r.full_name)}</strong><small>${escapeHTML(r.email||r.whatsapp||'Sem contato')}</small></div></div>` },
-    { label:'CPF', render:r=>escapeHTML(formatCPF(r.cpf||'')) || '—' },
-    { label:'Cidade', render:r=>escapeHTML([r.city,r.state].filter(Boolean).join('/')) || '—' },
-    { label:'Status', render:r=>`<span class="status-pill ${r.status}">${statusLabels[r.status]||r.status}</span>` }
-  ]});
-  bindEntityActions('students');
-}
-function renderGuardians() {
-  $('#guardians-list').innerHTML = entityTable({ table:'guardians', rows:state.guardians, columns:[
-    { label:'Responsável', render:r=>`<div class="entity-cell">${r.photo_url?`<img src="${escapeHTML(r.photo_url)}" alt="">`:'<span class="entity-avatar">👨‍👩‍👧</span>'}<div><strong>${escapeHTML(r.full_name)}</strong><small>${escapeHTML(r.email||r.whatsapp||'Sem contato')}</small></div></div>` },
-    { label:'CPF', render:r=>escapeHTML(formatCPF(r.cpf||'')) || '—' },
-    { label:'Cidade', render:r=>escapeHTML([r.city,r.state].filter(Boolean).join('/')) || '—' },
-    { label:'Status', render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativo':'Inativo'}</span>` }
-  ]});
-  bindEntityActions('guardians');
-}
-function renderCompanies() {
-  $('#companies-list').innerHTML = entityTable({ table:'companies', rows:state.companies, columns:[
-    { label:'Empresa', render:r=>`<div class="entity-cell">${r.photo_url?`<img src="${escapeHTML(r.photo_url)}" alt="">`:'<span class="entity-avatar">🏢</span>'}<div><strong>${escapeHTML(r.trade_name||r.legal_name)}</strong><small>${escapeHTML(r.legal_name)}</small></div></div>` },
-    { label:'CNPJ', render:r=>escapeHTML(formatCNPJ(r.cnpj||'')) || '—' },
-    { label:'Contato', render:r=>escapeHTML(r.whatsapp||r.phone||r.email||'—') },
-    { label:'Status', render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativa':'Inativa'}</span>` }
-  ]});
-  bindEntityActions('companies');
-}
-function renderProducts() {
-  $('#products-list').innerHTML = entityTable({ table:'products', rows:state.products, columns:[
-    { label:'Produto', render:r=>`<div><strong>${escapeHTML(r.name)}</strong><small class="block">${productTypes[r.product_type]||r.product_type}</small></div>` },
-    { label:'Categoria', key:'category' },
-    { label:'Modalidade', key:'modality' },
-    { label:'Valor padrão', render:r=>money(r.list_price) },
-    { label:'Status', render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativo':'Inativo'}</span>` }
-  ]});
-  bindEntityActions('products');
-}
-function renderContracts() {
-  $('#contracts-list').innerHTML = entityTable({ table:'contracts', rows:state.contracts, columns:[
-    { label:'Contrato', render:r=>`<div><strong>${escapeHTML(r.contract_number)}</strong><small class="block">${fmtDate(r.contract_date)}</small></div>` },
-    { label:'Contratado', render:r=>escapeHTML(r.student?.full_name || r.company?.trade_name || r.company?.legal_name || '—') },
-    { label:'Produto', render:r=>escapeHTML(r.product?.name || '—') },
-    { label:'Valor', render:r=>money(r.contract_value) },
-    { label:'Status', render:r=>`<span class="status-pill ${r.status}">${contractStatus[r.status]||r.status}</span>` }
-  ], empty:'Nenhum contrato cadastrado ainda.'});
-  bindEntityActions('contracts');
-}
-
-function renderMembers() {
-  $('#users-list').innerHTML = state.members.length ? state.members.map(member => `<div class="member-row"><div class="entity-cell"><span class="entity-avatar">👤</span><div><strong>${escapeHTML(member.profile?.full_name || member.profile?.email || 'Usuário')}</strong><small>${escapeHTML(member.profile?.email || '')}</small></div></div><select data-member-role="${member.user_id}" ${(!isAdmin() || member.role==='owner')?'disabled':''}>${Object.entries(roleLabels).map(([value,label])=>`<option value="${value}" ${member.role===value?'selected':''}>${label}</option>`).join('')}</select><label class="switch-label"><input type="checkbox" data-member-active="${member.user_id}" ${member.active?'checked':''} ${(!isAdmin() || member.role==='owner')?'disabled':''}><span>Ativo</span></label></div>`).join('') : '<div class="empty-state">Nenhum usuário encontrado.</div>';
-  $$('[data-member-role]').forEach(select => select.addEventListener('change', async () => {
-    try { await one.updateMember(select.dataset.memberRole, { role: select.value }); toast('Nível de acesso atualizado.'); await refreshAll(); }
-    catch (error) { toast(error.message, 'error'); await refreshAll(); }
-  }));
-  $$('[data-member-active]').forEach(input => input.addEventListener('change', async () => {
-    try { await one.updateMember(input.dataset.memberActive, { active: input.checked }); toast('Status do usuário atualizado.'); await refreshAll(); }
-    catch (error) { toast(error.message, 'error'); await refreshAll(); }
-  }));
-}
-
-function bindEntityActions(table) {
-  $$(`[data-edit-${table}]`).forEach(button => button.addEventListener('click', () => editEntity(table, button.getAttribute(`data-edit-${table}`))));
-  $$(`[data-delete-${table}]`).forEach(button => button.addEventListener('click', () => deleteEntity(table, button.getAttribute(`data-delete-${table}`))));
-}
-
-function tableName(kind) { return `one_${kind}`; }
-async function deleteEntity(kind, id) {
-  if (!isAdmin()) { toast('Somente proprietário ou administrador pode excluir cadastros.', 'warning'); return; }
-  const labels = { students:'aluno', guardians:'responsável', companies:'empresa', products:'produto', contracts:'contrato' };
-  if (!confirm(`Excluir este ${labels[kind] || 'registro'}? O sistema bloqueará a exclusão se houver vínculos importantes.`)) return;
-  try { await one.remove(tableName(kind), id); toast('Registro excluído.'); await refreshAll(); }
-  catch (error) { toast(`Não foi possível excluir: ${error.message}`, 'error'); }
-}
-
-function editEntity(kind, id) {
-  const item = state[kind].find(x=>x.id===id);
-  if (!item) return;
-  state.editing[kind] = id;
-  const form = $(`#${kind}-form`);
-  if (!form) return;
-  Object.entries(item).forEach(([key,value]) => {
-    const input = form.elements.namedItem(key);
-    if (!input || ['file'].includes(input.type)) return;
-    if (input.type === 'checkbox') input.checked = Boolean(value);
-    else input.value = value ?? '';
-  });
-  $(`#${kind}-form-title`).textContent = kind==='students'?'Editar aluno':kind==='guardians'?'Editar responsável':kind==='companies'?'Editar empresa':kind==='products'?'Editar produto':'Editar contrato';
-  state.desktop.open(kind);
-  form.querySelector('input,select,textarea')?.focus();
-}
-
-function updateSelects() {
-  const options = (items, valueKey, label) => `<option value="">Selecione...</option>${items.map(x=>`<option value="${x[valueKey]}">${escapeHTML(label(x))}</option>`).join('')}`;
-  $('#contract-student-id').innerHTML = options(state.students.filter(x=>x.status!=='cancelado'), 'id', x=>x.full_name);
-  $('#contract-guardian-id').innerHTML = options(state.guardians.filter(x=>x.active), 'id', x=>x.full_name);
-  $('#contract-company-id').innerHTML = options(state.companies.filter(x=>x.active), 'id', x=>x.trade_name||x.legal_name);
-  $('#contract-product-id').innerHTML = options(state.products.filter(x=>x.active), 'id', x=>`${x.name} • ${money(x.list_price)}`);
-}
-
-function formPayload(form) {
-  const data = Object.fromEntries(new FormData(form).entries());
-  Object.keys(data).forEach(key => { if (data[key] === '') data[key] = null; });
-  form.querySelectorAll('input[type=checkbox]').forEach(input => data[input.name] = input.checked);
-  return data;
-}
-
-async function saveStudent(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const payload = formPayload(form);
-  payload.cpf = digits(payload.cpf || '') || null;
-  payload.cep = digits(payload.cep || '') || null;
-  if (payload.cpf && !validCPF(payload.cpf)) return toast('CPF inválido. Confira os números.', 'warning');
-  const duplicate = state.students.find(x=>x.cpf && x.cpf===payload.cpf && x.id!==state.editing.students);
-  if (duplicate) return toast(`CPF já cadastrado para ${duplicate.full_name}.`, 'warning');
-  try {
-    const saved = await one.save('one_students', payload, state.editing.students);
-    const file = $('#student-photo').files[0];
-    if (file) {
-      const photoPath = await one.uploadPhoto(file, 'students', saved.id);
-      await one.save('one_students', { photo_path: photoPath }, saved.id);
-    }
-    toast(state.editing.students ? 'Aluno atualizado.' : 'Aluno cadastrado.');
-    const advance = form.dataset.advance === 'contract';
-    resetForm('students'); await refreshAll();
-    if (advance) { state.desktop.open('contracts'); $('#contract-student-id').value = saved.id; $('#contract-product-id').focus(); }
-  } catch (error) { toast(error.message, 'error'); }
-  finally { delete form.dataset.advance; }
-}
-
-async function saveGuardian(event) {
-  event.preventDefault(); const form=event.currentTarget; const payload=formPayload(form);
-  payload.cpf=digits(payload.cpf||'')||null; payload.cep=digits(payload.cep||'')||null;
-  if (payload.cpf && !validCPF(payload.cpf)) return toast('CPF inválido.', 'warning');
-  const duplicate=state.guardians.find(x=>x.cpf&&x.cpf===payload.cpf&&x.id!==state.editing.guardians);
-  if (duplicate) return toast(`CPF já cadastrado para ${duplicate.full_name}.`, 'warning');
-  try { const saved=await one.save('one_guardians',payload,state.editing.guardians); const file=$('#guardian-photo').files[0]; if(file){ const photoPath=await one.uploadPhoto(file,'guardians',saved.id); await one.save('one_guardians',{photo_path:photoPath},saved.id); } toast(state.editing.guardians?'Responsável atualizado.':'Responsável cadastrado.'); resetForm('guardians'); await refreshAll(); }
-  catch(error){ toast(error.message,'error'); }
-}
-
-async function saveCompany(event) {
-  event.preventDefault(); const form=event.currentTarget; const payload=formPayload(form);
-  payload.cnpj=digits(payload.cnpj||'')||null; payload.cep=digits(payload.cep||'')||null;
-  if(payload.cnpj&&!validCNPJ(payload.cnpj)) return toast('CNPJ inválido.', 'warning');
-  const duplicate=state.companies.find(x=>x.cnpj&&x.cnpj===payload.cnpj&&x.id!==state.editing.companies);
-  if(duplicate) return toast(`CNPJ já cadastrado para ${duplicate.trade_name||duplicate.legal_name}.`,'warning');
-  try { const saved=await one.save('one_companies',payload,state.editing.companies); const file=$('#company-photo').files[0]; if(file){ const photoPath=await one.uploadPhoto(file,'companies',saved.id); await one.save('one_companies',{photo_path:photoPath},saved.id); } toast(state.editing.companies?'Empresa atualizada.':'Empresa cadastrada.'); resetForm('companies'); await refreshAll(); }
-  catch(error){ toast(error.message,'error'); }
-}
-
-async function saveProduct(event) {
-  event.preventDefault(); const payload=formPayload(event.currentTarget);
-  ['list_price','enrollment_fee'].forEach(k=>payload[k]=Number(payload[k]||0));
-  payload.max_installments=Number(payload.max_installments||1);
-  try { await one.save('one_products',payload,state.editing.products); toast(state.editing.products?'Produto atualizado.':'Produto cadastrado.'); resetForm('products'); await refreshAll(); }
-  catch(error){ toast(error.message,'error'); }
-}
-
-function nextContractNumber() {
-  const year = new Date().getFullYear();
-  const seqs = state.contracts.map(c => String(c.contract_number||'')).filter(n => n.startsWith(`${year}-`)).map(n => Number(n.split('-').pop())).filter(Number.isFinite);
-  const seq = (seqs.length ? Math.max(...seqs) : 0) + 1;
-  return `${year}-${String(seq).padStart(5,'0')}`;
-}
-async function saveContract(event) {
-  event.preventDefault(); const payload=formPayload(event.currentTarget);
-  if(!payload.contract_number) payload.contract_number=nextContractNumber();
-  ['contract_value','enrollment_fee','installment_value'].forEach(k=>payload[k]=Number(payload[k]||0));
-  payload.installments=Number(payload.installments||1); payload.due_day=payload.due_day?Number(payload.due_day):null;
-  if(!payload.student_id&&!payload.company_id) return toast('Selecione um aluno ou empresa contratante.','warning');
-  try { await one.save('one_contracts',payload,state.editing.contracts); toast(state.editing.contracts?'Contrato atualizado.':'Contrato registrado.'); resetForm('contracts'); await refreshAll(); }
-  catch(error){ toast(error.message,'error'); }
-}
-
-function resetForm(kind) {
-  state.editing[kind]=null; const form=$(`#${kind}-form`); form?.reset();
-  const titles={students:'Novo aluno',guardians:'Novo responsável',companies:'Nova empresa',products:'Novo produto ou plano',contracts:'Novo contrato'};
-  const title=$(`#${kind}-form-title`); if(title) title.textContent=titles[kind];
-  if(kind==='contracts') { $('#contract-number').value=nextContractNumber(); $('#contract-date').value=new Date().toISOString().slice(0,10); }
-}
-
-function bindFormControls() {
-  $('#students-form').addEventListener('submit', saveStudent);
-  $('#guardians-form').addEventListener('submit', saveGuardian);
-  $('#companies-form').addEventListener('submit', saveCompany);
-  $('#products-form').addEventListener('submit', saveProduct);
-  $('#contracts-form').addEventListener('submit', saveContract);
-  $('#student-save-contract').addEventListener('click', () => { $('#students-form').dataset.advance='contract'; $('#students-form').requestSubmit(); });
-  $$('[data-reset-form]').forEach(btn=>btn.addEventListener('click',()=>resetForm(btn.dataset.resetForm)));
-  $$('[data-mask="cpf"]').forEach(input=>input.addEventListener('input',()=>input.value=formatCPF(input.value)));
-  $$('[data-mask="cnpj"]').forEach(input=>input.addEventListener('input',()=>input.value=formatCNPJ(input.value)));
-  $$('[data-mask="cep"]').forEach(input=>input.addEventListener('input',()=>input.value=formatCEP(input.value)));
-  $$('[data-mask="phone"]').forEach(input=>input.addEventListener('input',()=>input.value=formatPhone(input.value)));
-  $('#student-cep').addEventListener('change',()=>fetchCEP($('#student-cep'),'#student-city','#student-state'));
-  $('#guardian-cep').addEventListener('change',()=>fetchCEP($('#guardian-cep'),'#guardian-city','#guardian-state'));
-  $('#company-cep').addEventListener('change',()=>fetchCEP($('#company-cep'),'#company-city','#company-state'));
-  $('#contract-product-id').addEventListener('change',()=>{
-    const product=state.products.find(x=>x.id===$('#contract-product-id').value); if(!product)return;
-    $('#contract-value').value=Number(product.list_price||0).toFixed(2); $('#contract-enrollment-fee').value=Number(product.enrollment_fee||0).toFixed(2); $('#contract-installments').value=product.max_installments||1;
-    const installments=Number(product.max_installments||1); $('#contract-installment-value').value=(Number(product.list_price||0)/installments).toFixed(2);
-  });
-}
-
-function bindDesktop() {
-  const desktop = new DesktopManager({ desktop:$('#desktop-canvas'), taskbarApps:$('#taskbar-apps'), startMenu:$('#start-menu') });
-  state.desktop = desktop;
-  [
-    ['cadastros','Cadastros','🗂️'],['students','Alunos','👨‍🎓'],['guardians','Responsáveis','👨‍👩‍👧'],['companies','Empresas','🏢'],['products','Produtos e Planos','📦'],['contracts','Gestão do Aluno e Contratos','📄'],['commercial','Comercial','🎯'],['finance','Financeiro','💰'],['agenda','Agenda e Tarefas','🗓️'],['documents','Documentos','🗃️'],['reports','Relatórios','📊'],['admin','Administração','⚙️']
-  ].forEach(([id,title,icon])=>desktop.register(id,{title,icon}));
-  $$('[data-open-window]').forEach(button=>button.addEventListener('click',()=>desktop.open(button.dataset.openWindow)));
-  $('#start-button').addEventListener('click',event=>{ event.stopPropagation(); $('#start-menu').classList.toggle('hidden'); });
-  document.addEventListener('click',event=>{ if(!event.target.closest('#start-menu')&&!event.target.closest('#start-button')) $('#start-menu').classList.add('hidden'); });
-  $('#commercial-frame').src=CRM_URL;
-  $('#open-crm-new-tab').href=CRM_URL;
-}
-
-function bindClock() {
-  const tick=()=>{ const now=new Date(); $('#clock-time').textContent=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); $('#clock-date').textContent=now.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}); };
-  tick(); setInterval(tick,30000);
-}
-
-async function init() {
-  document.title=APP_NAME;
-  bindDesktop(); bindFormControls(); bindClock(); resetForm('contracts');
-  $('#login-form').addEventListener('submit', async event=>{
-    event.preventDefault(); const button=$('#login-button'); button.disabled=true; button.textContent='Entrando...';
-    const email=$('#login-email').value.trim(); const password=$('#login-password').value;
-    const { data,error }=await supabase.auth.signInWithPassword({email,password});
-    button.disabled=false; button.textContent='Entrar no Evolua One';
-    if(error) return toast('E-mail ou senha inválidos.','error'); if(data.user) await enterApp(data.user);
-  });
-  $('#logout-button').addEventListener('click',async()=>{ await supabase.auth.signOut(); showLogin(); });
-  $('#refresh-button').addEventListener('click',async()=>{ try{await refreshAll();toast('Dados atualizados.');}catch(error){toast(error.message,'error');} });
-  $('#new-user-invite').addEventListener('click',()=>toast('O convite seguro de novos usuários será ativado na próxima etapa via função protegida do Supabase.','warning'));
-  const {data:{session}}=await supabase.auth.getSession(); if(session?.user) await enterApp(session.user); else showLogin();
-  supabase.auth.onAuthStateChange(async(event,sessionState)=>{ if(event==='SIGNED_OUT')showLogin(); if(event==='SIGNED_IN'&&sessionState?.user&&state.user?.id!==sessionState.user.id)await enterApp(sessionState.user); });
-}
-
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const state={user:null,profile:null,role:null,workspaceId:null,desktop:null,students:[],guardians:[],companies:[],products:[],contracts:[],members:[],serviceHistory:[],accounts:[],categories:[],receivables:[],receipts:[],payables:[],payablePayments:[],tasks:[],documents:[],backups:[],editing:{students:null,guardians:null,companies:null,products:null,contracts:null,service:null,receivables:null,payables:null,financialAccounts:null,tasks:null,documents:null}};
+const roleLabels={owner:'Proprietário',admin:'Administrador',commercial:'Comercial',financial:'Financeiro',reception:'Recepção',student_management:'Gestão do Aluno',viewer:'Consulta'};
+const statusLabels={ativo:'Ativo',inativo:'Inativo',trancado:'Trancado',cancelado:'Cancelado',concluido:'Concluído'};
+const productTypes={curso:'Curso avulso',pacote:'Pacote',plano:'Plano / assinatura',servico:'Serviço'};
+const contractStatus={rascunho:'Rascunho',aguardando_assinatura:'Aguardando assinatura',ativo:'Ativo',trancado:'Trancado',cancelado:'Cancelado',concluido:'Concluído',substituido:'Substituído'};
+const taskPriority={baixa:'Baixa',normal:'Normal',alta:'Alta',urgente:'Urgente'};
+function toast(message,type='success'){const n=document.createElement('div');n.className=`toast ${type}`;n.textContent=message;$('#toast-container')?.appendChild(n);setTimeout(()=>n.remove(),4300)}
+function escapeHTML(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function digits(v=''){return String(v).replace(/\D/g,'')}
+function formatCPF(v=''){const x=digits(v).slice(0,11);return x.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2')}
+function formatCNPJ(v=''){const x=digits(v).slice(0,14);return x.replace(/(\d{2})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2')}
+function formatCEP(v=''){return digits(v).slice(0,8).replace(/(\d{5})(\d)/,'$1-$2')}
+function formatPhone(v=''){const x=digits(v).slice(0,11);return x.length<=10?x.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{4})(\d)/,'$1-$2'):x.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2')}
+function money(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function fmtDate(v){if(!v)return'—';const d=String(v).slice(0,10);return new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR')}
+function fmtDateTime(v){if(!v)return'—';return new Date(v).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}
+function isAdmin(){return['owner','admin'].includes(state.role)}
+function todayISO(){return new Date().toISOString().slice(0,10)}
+function totalDue(r){return Number(r.original_amount||0)-Number(r.discount_amount||0)+Number(r.fine_amount||0)+Number(r.interest_amount||0)}
+function sum(arr,fn=x=>x){return arr.reduce((a,x)=>a+Number(fn(x)||0),0)}
+function isOverdue(item){return['aberto','parcial'].includes(item.status)&&String(item.due_date)<todayISO()}
+function validCPF(value){const cpf=digits(value);if(cpf.length!==11||/^(\d)\1{10}$/.test(cpf))return false;let s=0;for(let i=0;i<9;i++)s+=Number(cpf[i])*(10-i);let d1=(s*10)%11;if(d1===10)d1=0;if(d1!==Number(cpf[9]))return false;s=0;for(let i=0;i<10;i++)s+=Number(cpf[i])*(11-i);let d2=(s*10)%11;if(d2===10)d2=0;return d2===Number(cpf[10])}
+function validCNPJ(value){const c=digits(value);if(c.length!==14||/^(\d)\1{13}$/.test(c))return false;const calc=len=>{let size=len-7,s=0;for(let i=0;i<len;i++){s+=Number(c[i])*size--;if(size<2)size=9}const r=s%11;return r<2?0:11-r};return calc(12)===Number(c[12])&&calc(13)===Number(c[13])}
+async function fetchCEP(input,cityTarget,stateTarget){const cep=digits(input.value);if(cep.length!==8)return;try{const r=await fetch(`https://viacep.com.br/ws/${cep}/json/`);if(!r.ok)throw new Error();const d=await r.json();if(d.erro)throw new Error();$(cityTarget).value=d.localidade||'';$(stateTarget).value=d.uf||'';toast(`Cidade localizada: ${d.localidade||''}/${d.uf||''}`)}catch{toast('Não consegui localizar esse CEP agora. Preencha cidade e estado manualmente.','warning')}}
+function showLogin(){$('#login-view').classList.remove('hidden');$('#desktop-view').classList.add('hidden')}function showDesktop(){$('#login-view').classList.add('hidden');$('#desktop-view').classList.remove('hidden')}
+async function enterApp(user){state.user=user;try{const boot=await one.bootstrap(user);state.workspaceId=boot.workspaceId;state.profile=boot.profile;state.role=boot.membership?.role||'viewer';$('#top-user-name').textContent=state.profile?.full_name||user.email?.split('@')[0]||'Usuário';$('#top-user-role').textContent=roleLabels[state.role]||state.role;$('#version-label').textContent=`v${VERSION}`;showDesktop();await refreshAll()}catch(e){console.error(e);toast(`Falha ao abrir o Evolua One: ${e.message}`,'error')}}
+async function refreshAll(){const [students,guardians,companies,products,contracts,members,serviceHistory,accounts,categories,receivables,receipts,payables,payablePayments,tasks,documents,backups]=await Promise.all([one.list('one_students','full_name',true),one.list('one_guardians','full_name',true),one.list('one_companies','legal_name',true),one.list('one_products','name',true),one.contractsExpanded(),one.listMembers(),one.list('one_service_history','occurred_at',false),one.list('one_financial_accounts','name',true),one.list('one_financial_categories','name',true),one.receivablesExpanded(),one.listReceipts(),one.payablesExpanded(),one.listPayablePayments(),one.list('one_tasks','due_at',true),one.list('one_documents','created_at',false),one.list('one_backup_log','created_at',false)]);const hydrate=async items=>Promise.all(items.map(async item=>({...item,photo_url:item.photo_path?await one.signedPhoto(item.photo_path):null})));const[s,g,c]=await Promise.all([hydrate(students),hydrate(guardians),hydrate(companies)]);Object.assign(state,{students:s,guardians:g,companies:c,products,contracts,members,serviceHistory,accounts,categories,receivables,receipts,payables,payablePayments,tasks,documents,backups});renderEverything()}
+function renderEverything(){renderHome();renderStudents();renderGuardians();renderCompanies();renderProducts();renderContracts();renderService();renderFinance();renderTasks();renderDocuments();renderReports();renderMembers();renderBackupHistory();updateSelects();if(!state.editing.contracts&&$('#contract-number'))$('#contract-number').value=nextContractNumber()}
+function upcomingBirthdays(){const today=new Date();today.setHours(0,0,0,0);const items=[...state.students.filter(x=>x.birth_date).map(x=>({type:'Aluno',name:x.full_name,date:x.birth_date,id:x.id,entity:'student',whatsapp:x.whatsapp||x.phone})),...state.guardians.filter(x=>x.birth_date).map(x=>({type:'Responsável',name:x.full_name,date:x.birth_date,id:x.id,entity:'guardian',whatsapp:x.whatsapp||x.phone}))];return items.map(item=>{const[y,m,d]=item.date.split('-').map(Number);let next=new Date(today.getFullYear(),m-1,d);if(next<today)next=new Date(today.getFullYear()+1,m-1,d);return{...item,next,days:Math.round((next-today)/86400000),age:next.getFullYear()-y}}).filter(x=>x.days<=30).sort((a,b)=>a.days-b.days)}
+function renderHome(){const birthdays=upcomingBirthdays(),todayB=birthdays.filter(x=>x.days===0),overTasks=state.tasks.filter(x=>['pendente','em_andamento'].includes(x.status)&&new Date(x.due_at)<new Date()),overRec=state.receivables.filter(isOverdue),todayPay=state.payables.filter(x=>x.status!=='pago'&&x.status!=='cancelado'&&String(x.due_date)<=todayISO());$('#home-kpis').innerHTML=[['👨‍🎓','Alunos',state.students.filter(x=>x.status==='ativo').length,`${state.students.length} cadastrados`],['📄','Contratos ativos',state.contracts.filter(x=>x.status==='ativo').length,`${state.contracts.length} contratos`],['💰','A receber vencido',money(sum(overRec,totalDue)),`${overRec.length} pendências`],['🗓️','Tarefas atrasadas',overTasks.length,'exigem atenção'],['🎂','Aniversários hoje',todayB.length,birthdays.length?`${birthdays.length} nos próximos 30 dias`:'nenhum próximo']].map(([i,l,v,s])=>`<article class="home-kpi"><span>${i}</span><div><small>${l}</small><strong>${v}</strong><em>${s}</em></div></article>`).join('');const birthHTML=birthdays.length?birthdays.slice(0,8).map(x=>`<div class="birthday-row"><span class="birthday-icon">🎂</span><div><strong>${escapeHTML(x.name)}</strong><small>${x.type} • ${x.days===0?'Hoje':x.days===1?'Amanhã':`em ${x.days} dias`}</small></div></div>`).join(''):'<div class="empty-state">Nenhum aniversário nos próximos 30 dias.</div>';$('#birthday-list').innerHTML=birthHTML;if($('#agenda-birthdays'))$('#agenda-birthdays').innerHTML=birthHTML;const notices=todayB.length+overTasks.length+overRec.length+todayPay.length;$('#notification-count').textContent=String(notices);$('#notification-count').classList.toggle('hidden',notices===0)}
+function entityTable({rows,columns,table,empty='Nenhum cadastro encontrado.',extraActions=''}){if(!rows.length)return`<div class="empty-state">${empty}</div>`;return`<div class="data-table-wrap"><table class="data-table"><thead><tr>${columns.map(c=>`<th>${c.label}</th>`).join('')}<th>Ações</th></tr></thead><tbody>${rows.map(r=>`<tr>${columns.map(c=>`<td>${c.render(r)}</td>`).join('')}<td class="row-actions"><button class="mini-btn" data-edit="${table}" data-id="${r.id}">Editar</button>${extraActions?extraActions.replaceAll('{id}',r.id):''}${isAdmin()?`<button class="mini-btn danger" data-delete="${table}" data-id="${r.id}">Excluir</button>`:''}</td></tr>`).join('')}</tbody></table></div>`}
+function avatarCell(r,name){const img=r.photo_url?`<img src="${escapeHTML(r.photo_url)}" alt="">`:`<span class="entity-avatar">${escapeHTML((name||'?')[0])}</span>`;return`<div class="entity-cell">${img}<div><strong>${escapeHTML(name)}</strong><small>${escapeHTML(r.email||r.whatsapp||r.phone||'')}</small></div></div>`}
+function bindEntityActions(kind){$$(`[data-edit="${kind}"]`).forEach(b=>b.onclick=()=>editEntity(kind,b.dataset.id));$$(`[data-delete="${kind}"]`).forEach(b=>b.onclick=()=>deleteEntity(kind,b.dataset.id))}
+function renderStudents(){if(!$('#students-list'))return;$('#students-list').innerHTML=entityTable({table:'students',rows:state.students,columns:[{label:'Aluno',render:r=>avatarCell(r,r.full_name)},{label:'CPF',render:r=>r.cpf?formatCPF(r.cpf):'—'},{label:'Cidade',render:r=>escapeHTML([r.city,r.state].filter(Boolean).join('/'))||'—'},{label:'Status',render:r=>`<span class="status-pill ${r.status}">${statusLabels[r.status]||r.status}</span>`}]});bindEntityActions('students')}
+function renderGuardians(){if(!$('#guardians-list'))return;$('#guardians-list').innerHTML=entityTable({table:'guardians',rows:state.guardians,columns:[{label:'Responsável',render:r=>avatarCell(r,r.full_name)},{label:'CPF',render:r=>r.cpf?formatCPF(r.cpf):'—'},{label:'Contato',render:r=>escapeHTML(r.whatsapp||r.phone||'—')},{label:'Status',render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativo':'Inativo'}</span>`}]});bindEntityActions('guardians')}
+function renderCompanies(){if(!$('#companies-list'))return;$('#companies-list').innerHTML=entityTable({table:'companies',rows:state.companies,columns:[{label:'Empresa',render:r=>avatarCell(r,r.trade_name||r.legal_name)},{label:'CNPJ',render:r=>r.cnpj?formatCNPJ(r.cnpj):'—'},{label:'Contato',render:r=>escapeHTML(r.contact_name||r.whatsapp||r.phone||'—')},{label:'Status',render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativa':'Inativa'}</span>`}]});bindEntityActions('companies')}
+function renderProducts(){if(!$('#products-list'))return;$('#products-list').innerHTML=entityTable({table:'products',rows:state.products,columns:[{label:'Produto',render:r=>`<div><strong>${escapeHTML(r.name)}</strong><small class="block">${productTypes[r.product_type]||r.product_type}</small></div>`},{label:'Modalidade',render:r=>escapeHTML(r.modality||'—')},{label:'Valor',render:r=>money(r.list_price)},{label:'Status',render:r=>`<span class="status-pill ${r.active?'ativo':'inativo'}">${r.active?'Ativo':'Inativo'}</span>`}]});bindEntityActions('products')}
+function renderContracts(){if(!$('#contracts-list'))return;$('#contracts-list').innerHTML=entityTable({table:'contracts',rows:state.contracts,columns:[{label:'Contrato',render:r=>`<div><strong>${escapeHTML(r.contract_number)}</strong><small class="block">${fmtDate(r.contract_date)}</small></div>`},{label:'Contratado',render:r=>escapeHTML(r.student?.full_name||r.company?.trade_name||r.company?.legal_name||'—')},{label:'Produto',render:r=>escapeHTML(r.product?.name||'—')},{label:'Valor',render:r=>money(Number(r.contract_value||0)+Number(r.enrollment_fee||0))},{label:'Status',render:r=>`<span class="status-pill ${r.status}">${contractStatus[r.status]||r.status}</span>`}],extraActions:'<button class="mini-btn" data-contract-print="{id}">Ficha</button><button class="mini-btn" data-contract-receivables="{id}">Parcelas</button>'});bindEntityActions('contracts');$$('[data-contract-print]').forEach(b=>b.onclick=()=>printContractById(b.dataset.contractPrint));$$('[data-contract-receivables]').forEach(b=>b.onclick=()=>generateReceivables(b.dataset.contractReceivables))}
+function serviceEntityName(row){if(row.student_id)return state.students.find(x=>x.id===row.student_id)?.full_name||'Aluno';if(row.guardian_id)return state.guardians.find(x=>x.id===row.guardian_id)?.full_name||'Responsável';if(row.company_id){const c=state.companies.find(x=>x.id===row.company_id);return c?.trade_name||c?.legal_name||'Empresa'}return'—'}
+function renderService(){if(!$('#service-list'))return;$('#service-list').innerHTML=entityTable({table:'service',rows:state.serviceHistory,columns:[{label:'Data',render:r=>fmtDateTime(r.occurred_at)},{label:'Contato',render:r=>escapeHTML(serviceEntityName(r))},{label:'Categoria',render:r=>escapeHTML(r.category||'—')},{label:'Resumo',render:r=>`<strong>${escapeHTML(r.summary)}</strong><small class="block">${escapeHTML(r.outcome||'')}</small>`},{label:'Status',render:r=>`<span class="status-pill ${r.status==='concluido'?'concluida':'pendente'}">${escapeHTML(r.status)}</span>`}]});bindEntityActions('service')}
+function paidForReceivable(id){return sum(state.receipts.filter(x=>x.receivable_id===id&&!x.reversed),x=>x.amount)}function paidForPayable(id){return sum(state.payablePayments.filter(x=>x.payable_id===id&&!x.reversed),x=>x.amount)}
+function renderFinance(){if(!$('#finance-kpis'))return;const thisMonth=new Date().toISOString().slice(0,7),receivedMonth=sum(state.receipts.filter(x=>!x.reversed&&String(x.paid_at).slice(0,7)===thisMonth),x=>x.amount),paidMonth=sum(state.payablePayments.filter(x=>!x.reversed&&String(x.paid_at).slice(0,7)===thisMonth),x=>x.amount),open=state.receivables.filter(x=>['aberto','parcial'].includes(x.status)),overdue=open.filter(isOverdue),accountBalance=sum(state.accounts,x=>x.opening_balance)+sum(state.receipts.filter(x=>!x.reversed),x=>x.amount)-sum(state.payablePayments.filter(x=>!x.reversed),x=>x.amount);$('#finance-kpis').innerHTML=[['Recebido no mês',money(receivedMonth),`${state.receipts.length} lançamentos`],['A receber',money(sum(open,r=>Math.max(0,totalDue(r)-paidForReceivable(r.id)))),`${open.length} contas`],['Vencido',money(sum(overdue,r=>Math.max(0,totalDue(r)-paidForReceivable(r.id)))),`${overdue.length} pendências`],['Despesas no mês',money(paidMonth),`${state.payablePayments.length} pagamentos`],['Saldo controlado',money(accountBalance),`${state.accounts.length} contas`]].map(([l,v,s])=>`<article class="metric-card"><small>${l}</small><strong>${v}</strong><em>${s}</em></article>`).join('');$('#receivables-list').innerHTML=state.receivables.length?`<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Cliente</th><th>Venc.</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody>${state.receivables.map(r=>{const name=r.student?.full_name||r.company?.trade_name||r.company?.legal_name||r.guardian?.full_name||'Avulso',due=totalDue(r),paid=paidForReceivable(r.id),status=isOverdue(r)?'Vencida':(r.status==='aberto'?'Em aberto':r.status==='parcial'?'Parcial':r.status==='pago'?'Paga':r.status);return`<tr><td><strong>${escapeHTML(name)}</strong><small class="block">${escapeHTML(r.description)}</small></td><td>${fmtDate(r.due_date)}</td><td>${money(due)}<small class="block">Pago ${money(paid)}</small></td><td><span class="status-pill ${isOverdue(r)?'urgente':r.status}">${status}</span></td><td class="row-actions">${['aberto','parcial'].includes(r.status)?`<button class="mini-btn" data-receive="${r.id}">Receber</button>`:''}<button class="mini-btn" data-edit-fin="receivables" data-id="${r.id}">Editar</button>${isAdmin()?`<button class="mini-btn danger" data-delete-fin="receivables" data-id="${r.id}">Excluir</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty-state">Nenhuma conta a receber.</div>';$('#payables-list').innerHTML=state.payables.length?`<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Despesa</th><th>Venc.</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody>${state.payables.map(r=>{const paid=paidForPayable(r.id),over=['aberto','parcial'].includes(r.status)&&String(r.due_date)<todayISO();return`<tr><td><strong>${escapeHTML(r.description)}</strong><small class="block">${escapeHTML(r.supplier_name||r.cost_center||'')}</small></td><td>${fmtDate(r.due_date)}</td><td>${money(r.original_amount)}<small class="block">Pago ${money(paid)}</small></td><td><span class="status-pill ${over?'urgente':r.status}">${over?'Vencida':r.status==='pago'?'Paga':r.status==='parcial'?'Parcial':'Em aberto'}</span></td><td class="row-actions">${['aberto','parcial'].includes(r.status)?`<button class="mini-btn" data-pay="${r.id}">Pagar</button>`:''}<button class="mini-btn" data-edit-fin="payables" data-id="${r.id}">Editar</button>${isAdmin()?`<button class="mini-btn danger" data-delete-fin="payables" data-id="${r.id}">Excluir</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty-state">Nenhuma conta a pagar.</div>';$('#financial-accounts-list').innerHTML=state.accounts.length?`<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Conta</th><th>Tipo</th><th>Saldo estimado</th><th>Ações</th></tr></thead><tbody>${state.accounts.map(a=>{const inc=sum(state.receipts.filter(x=>x.account_id===a.id&&!x.reversed),x=>x.amount),out=sum(state.payablePayments.filter(x=>x.account_id===a.id&&!x.reversed),x=>x.amount),bal=Number(a.opening_balance||0)+inc-out;return`<tr><td><strong>${escapeHTML(a.name)}</strong></td><td>${escapeHTML(a.account_type)}</td><td>${money(bal)}</td><td><button class="mini-btn" data-edit-fin="financialAccounts" data-id="${a.id}">Editar</button>${isAdmin()?`<button class="mini-btn danger" data-delete-fin="financialAccounts" data-id="${a.id}">Excluir</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty-state">Cadastre ao menos uma conta ou caixa.</div>';$$('[data-receive]').forEach(b=>b.onclick=()=>receiveReceivable(b.dataset.receive));$$('[data-pay]').forEach(b=>b.onclick=()=>payPayable(b.dataset.pay));$$('[data-edit-fin]').forEach(b=>b.onclick=()=>editFinancial(b.dataset.editFin,b.dataset.id));$$('[data-delete-fin]').forEach(b=>b.onclick=()=>deleteFinancial(b.dataset.deleteFin,b.dataset.id))}
+function renderTasks(){if(!$('#tasks-list'))return;const rows=[...state.tasks].sort((a,b)=>new Date(a.due_at)-new Date(b.due_at));$('#tasks-list').innerHTML=rows.length?rows.map(t=>{const over=['pendente','em_andamento'].includes(t.status)&&new Date(t.due_at)<new Date(),member=state.members.find(m=>m.user_id===t.assigned_to);return`<div class="agenda-row ${over?'overdue':''}"><div class="agenda-time"><strong>${new Date(t.due_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</strong><small>${new Date(t.due_at).toLocaleDateString('pt-BR')}</small></div><div class="agenda-main"><strong>${escapeHTML(t.title)}</strong><small>${escapeHTML(t.category||'')} • ${escapeHTML(member?.profile?.full_name||'Sem responsável')} • ${taskPriority[t.priority]||t.priority}</small></div><div class="row-actions">${t.status!=='concluida'?`<button class="mini-btn" data-task-complete="${t.id}">Concluir</button>`:''}<button class="mini-btn" data-edit="tasks" data-id="${t.id}">Editar</button>${isAdmin()?`<button class="mini-btn danger" data-delete="tasks" data-id="${t.id}">Excluir</button>`:''}</div></div>`}).join(''):'<div class="empty-state">Nenhuma tarefa cadastrada.</div>';bindEntityActions('tasks');$$('[data-task-complete]').forEach(b=>b.onclick=()=>completeTask(b.dataset.taskComplete))}
+function documentEntityName(d){if(d.entity_type==='student')return state.students.find(x=>x.id===d.entity_id)?.full_name||'Aluno';if(d.entity_type==='guardian')return state.guardians.find(x=>x.id===d.entity_id)?.full_name||'Responsável';if(d.entity_type==='company'){const c=state.companies.find(x=>x.id===d.entity_id);return c?.trade_name||c?.legal_name||'Empresa'}if(d.entity_type==='contract')return state.contracts.find(x=>x.id===d.entity_id)?.contract_number||'Contrato';return'Geral'}
+function renderDocuments(){if(!$('#documents-list'))return;$('#documents-list').innerHTML=entityTable({table:'documents',rows:state.documents,columns:[{label:'Documento',render:r=>`<strong>${escapeHTML(r.title)}</strong><small class="block">${escapeHTML(r.document_type||'')}</small>`},{label:'Relacionado',render:r=>escapeHTML(documentEntityName(r))},{label:'Data',render:r=>fmtDateTime(r.created_at)},{label:'Arquivo',render:r=>r.drive_url?`<a class="btn ghost small" target="_blank" rel="noopener" href="${escapeHTML(r.drive_url)}">Abrir Drive</a>`:'—'}]});bindEntityActions('documents')}
+function reportLines(lines){return lines.map(([a,b])=>`<div class="report-line"><span>${a}</span><strong>${b}</strong></div>`).join('')}
+function renderReports(){if(!$('#reports-kpis'))return;const activeContracts=state.contracts.filter(x=>x.status==='ativo').length,received=sum(state.receipts.filter(x=>!x.reversed),x=>x.amount),spent=sum(state.payablePayments.filter(x=>!x.reversed),x=>x.amount),overdue=state.receivables.filter(isOverdue),pendingTasks=state.tasks.filter(x=>['pendente','em_andamento'].includes(x.status));$('#reports-kpis').innerHTML=[['Alunos ativos',state.students.filter(x=>x.status==='ativo').length,'Cadastros'],['Contratos ativos',activeContracts,'Gestão do aluno'],['Recebido total',money(received),'Financeiro'],['Resultado caixa',money(received-spent),'Entradas menos saídas'],['Inadimplência',money(sum(overdue,r=>Math.max(0,totalDue(r)-paidForReceivable(r.id)))),'Vencido']].map(([l,v,s])=>`<article class="metric-card"><small>${l}</small><strong>${v}</strong><em>${s}</em></article>`).join('');$('#report-contracts').innerHTML=reportLines([['Total',state.contracts.length],['Ativos',activeContracts],['Trancados',state.contracts.filter(x=>x.status==='trancado').length],['Cancelados',state.contracts.filter(x=>x.status==='cancelado').length],['Aguardando assinatura',state.contracts.filter(x=>x.status==='aguardando_assinatura').length]]);$('#report-finance').innerHTML=reportLines([['Recebido',money(received)],['Pago',money(spent)],['A receber',money(sum(state.receivables.filter(x=>['aberto','parcial'].includes(x.status)),r=>Math.max(0,totalDue(r)-paidForReceivable(r.id))))],['A pagar',money(sum(state.payables.filter(x=>['aberto','parcial'].includes(x.status)),r=>Math.max(0,Number(r.original_amount)-paidForPayable(r.id))))]]);$('#report-agenda').innerHTML=reportLines([['Pendentes',pendingTasks.length],['Atrasadas',pendingTasks.filter(x=>new Date(x.due_at)<new Date()).length],['Concluídas',state.tasks.filter(x=>x.status==='concluida').length],['Aniversários 30 dias',upcomingBirthdays().length]]);$('#report-registers').innerHTML=reportLines([['Alunos',state.students.length],['Responsáveis',state.guardians.length],['Empresas',state.companies.length],['Produtos',state.products.length],['Documentos',state.documents.length]])}
+function renderMembers(){if(!$('#users-list'))return;$('#users-list').innerHTML=state.members.length?state.members.map(m=>`<div class="member-row"><div><strong>${escapeHTML(m.profile?.full_name||m.profile?.email||m.user_id)}</strong><small class="block">${escapeHTML(m.profile?.email||'')}</small></div><select data-member-role="${m.user_id}" ${m.role==='owner'?'disabled':''}>${Object.entries(roleLabels).map(([v,l])=>`<option value="${v}" ${m.role===v?'selected':''}>${l}</option>`).join('')}</select><label class="switch-label"><input type="checkbox" data-member-active="${m.user_id}" ${m.active?'checked':''} ${m.role==='owner'?'disabled':''}><span>Ativo</span></label></div>`).join(''):'<div class="empty-state">Nenhum usuário vinculado.</div>';$$('[data-member-role]').forEach(s=>s.onchange=async()=>{try{await one.updateMember(s.dataset.memberRole,{role:s.value});toast('Permissão atualizada.');await refreshAll()}catch(e){toast(e.message,'error')}});$$('[data-member-active]').forEach(i=>i.onchange=async()=>{try{await one.updateMember(i.dataset.memberActive,{active:i.checked});toast('Status do usuário atualizado.');await refreshAll()}catch(e){toast(e.message,'error')}})}
+function renderBackupHistory(){if(!$('#backup-history'))return;$('#backup-history').innerHTML=state.backups.length?state.backups.slice(0,8).map(b=>`<div class="backup-row"><strong>${escapeHTML(b.file_name)}</strong><small>${fmtDateTime(b.created_at)} • ${b.record_count} registros • ${escapeHTML(b.destination)}</small></div>`).join(''):'<div class="empty-state">Nenhum backup registrado.</div>'}
+function options(rows,valueKey,labelFn,placeholder='Selecione'){return`<option value="">${placeholder}</option>`+rows.map(r=>`<option value="${r[valueKey]}">${escapeHTML(labelFn(r))}</option>`).join('')}
+function updateSelects(){$('#contract-student-id').innerHTML=options(state.students.filter(x=>x.status!=='cancelado'),'id',x=>x.full_name);$('#contract-guardian-id').innerHTML=options(state.guardians.filter(x=>x.active),'id',x=>x.full_name);$('#contract-company-id').innerHTML=options(state.companies.filter(x=>x.active),'id',x=>x.trade_name||x.legal_name);$('#contract-product-id').innerHTML=options(state.products.filter(x=>x.active),'id',x=>`${x.name} • ${money(x.list_price)}`);if($('#receivable-student-id'))$('#receivable-student-id').innerHTML=options(state.students,'id',x=>x.full_name,'Sem aluno');if($('#receivable-contract-id'))$('#receivable-contract-id').innerHTML=options(state.contracts,'id',x=>`${x.contract_number} • ${x.student?.full_name||x.company?.trade_name||x.company?.legal_name||''}`,'Sem contrato');if($('#task-assigned-to'))$('#task-assigned-to').innerHTML=options(state.members.filter(x=>x.active),'user_id',x=>x.profile?.full_name||x.profile?.email||x.user_id,'Sem responsável');updateServiceEntitySelect();updateDocumentEntitySelect()}
+function updateServiceEntitySelect(){const type=$('#service-entity-type')?.value||'student',sel=$('#service-entity-id');if(!sel)return;const rows=type==='student'?state.students:type==='guardian'?state.guardians:state.companies;sel.innerHTML=options(rows,'id',x=>x.full_name||x.trade_name||x.legal_name)}
+function updateDocumentEntitySelect(){const type=$('#document-entity-type')?.value||'student',sel=$('#document-entity-id');if(!sel)return;if(type==='geral'){sel.innerHTML='<option value="">Geral</option>';return}const rows=type==='student'?state.students:type==='guardian'?state.guardians:type==='company'?state.companies:state.contracts;sel.innerHTML=options(rows,'id',x=>x.full_name||x.trade_name||x.legal_name||x.contract_number)}
+function formPayload(form){const obj=Object.fromEntries(new FormData(form).entries());form.querySelectorAll('input[type="checkbox"][name]').forEach(i=>obj[i.name]=i.checked);Object.keys(obj).forEach(k=>{if(obj[k]==='')obj[k]=null});return obj}
+function fillForm(form,data){Object.entries(data||{}).forEach(([k,v])=>{const el=form.elements.namedItem(k);if(!el)return;if(el.type==='checkbox')el.checked=Boolean(v);else if(el.type==='datetime-local'&&v)el.value=new Date(v).toISOString().slice(0,16);else el.value=v??''})}
+const tableMap={students:['one_students','students-form'],guardians:['one_guardians','guardians-form'],companies:['one_companies','companies-form'],products:['one_products','products-form'],contracts:['one_contracts','contracts-form'],service:['one_service_history','service-form'],tasks:['one_tasks','tasks-form'],documents:['one_documents','documents-form']};
+function getRows(kind){return kind==='service'?state.serviceHistory:state[kind]||[]}
+function editEntity(kind,id){const row=getRows(kind).find(x=>x.id===id);if(!row)return;state.editing[kind]=id;const form=$(`#${kind}-form`);if(!form)return;if(kind==='service'){const type=row.student_id?'student':row.guardian_id?'guardian':'company';$('#service-entity-type').value=type;updateServiceEntitySelect();setTimeout(()=>{$('#service-entity-id').value=row.student_id||row.guardian_id||row.company_id},0)}if(kind==='documents'){$('#document-entity-type').value=row.entity_type||'geral';updateDocumentEntitySelect();setTimeout(()=>{$('#document-entity-id').value=row.entity_id||''},0)}fillForm(form,row);const title=$(`#${kind}-form-title`);if(title)title.textContent=`Editar ${kind==='students'?'aluno':kind==='guardians'?'responsável':kind==='companies'?'empresa':kind==='products'?'produto':kind==='contracts'?'contrato':kind==='service'?'atendimento':kind==='tasks'?'tarefa':'documento'}`;state.desktop?.open(kind==='service'?'service':kind==='tasks'?'agenda':kind)}
+async function deleteEntity(kind,id){const[table]=tableMap[kind]||[];if(!table)return;if(!confirm('Excluir este registro? Registros vinculados podem ser protegidos pelo sistema.'))return;try{await one.remove(table,id);toast('Registro excluído.');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveStudent(event){event.preventDefault();const form=event.currentTarget,p=formPayload(form);p.cpf=digits(p.cpf||'')||null;p.cep=digits(p.cep||'')||null;if(p.cpf&&!validCPF(p.cpf))return toast('CPF inválido.','warning');const dup=state.students.find(x=>x.cpf&&x.cpf===p.cpf&&x.id!==state.editing.students);if(dup)return toast(`CPF já cadastrado para ${dup.full_name}.`,'warning');try{const saved=await one.save('one_students',p,state.editing.students);const file=$('#student-photo').files[0];if(file){const photo=await one.uploadPhoto(file,'students',saved.id);await one.save('one_students',{photo_path:photo},saved.id)}const advance=form.dataset.advance==='contract';toast(state.editing.students?'Aluno atualizado.':'Aluno cadastrado.');resetForm('students');await refreshAll();if(advance){state.desktop.open('contracts');$('#contract-student-id').value=saved.id;$('#contract-product-id').focus()}}catch(e){toast(e.message,'error')}finally{delete form.dataset.advance}}
+async function saveGuardian(event){event.preventDefault();const p=formPayload(event.currentTarget);p.cpf=digits(p.cpf||'')||null;p.cep=digits(p.cep||'')||null;if(p.cpf&&!validCPF(p.cpf))return toast('CPF inválido.','warning');const dup=state.guardians.find(x=>x.cpf&&x.cpf===p.cpf&&x.id!==state.editing.guardians);if(dup)return toast(`CPF já cadastrado para ${dup.full_name}.`,'warning');try{const saved=await one.save('one_guardians',p,state.editing.guardians);const f=$('#guardian-photo').files[0];if(f){const photo=await one.uploadPhoto(f,'guardians',saved.id);await one.save('one_guardians',{photo_path:photo},saved.id)}toast(state.editing.guardians?'Responsável atualizado.':'Responsável cadastrado.');resetForm('guardians');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveCompany(event){event.preventDefault();const p=formPayload(event.currentTarget);p.cnpj=digits(p.cnpj||'')||null;p.cep=digits(p.cep||'')||null;if(p.cnpj&&!validCNPJ(p.cnpj))return toast('CNPJ inválido.','warning');const dup=state.companies.find(x=>x.cnpj&&x.cnpj===p.cnpj&&x.id!==state.editing.companies);if(dup)return toast(`CNPJ já cadastrado para ${dup.trade_name||dup.legal_name}.`,'warning');try{const saved=await one.save('one_companies',p,state.editing.companies);const f=$('#company-photo').files[0];if(f){const photo=await one.uploadPhoto(f,'companies',saved.id);await one.save('one_companies',{photo_path:photo},saved.id)}toast(state.editing.companies?'Empresa atualizada.':'Empresa cadastrada.');resetForm('companies');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveProduct(event){event.preventDefault();const p=formPayload(event.currentTarget);['list_price','enrollment_fee'].forEach(k=>p[k]=Number(p[k]||0));p.max_installments=Number(p.max_installments||1);try{await one.save('one_products',p,state.editing.products);toast(state.editing.products?'Produto atualizado.':'Produto cadastrado.');resetForm('products');await refreshAll()}catch(e){toast(e.message,'error')}}
+function nextContractNumber(){const year=new Date().getFullYear(),seqs=state.contracts.map(c=>String(c.contract_number||'')).filter(n=>n.startsWith(`${year}-`)).map(n=>Number(n.split('-').pop())).filter(Number.isFinite);return`${year}-${String((seqs.length?Math.max(...seqs):0)+1).padStart(5,'0')}`}
+async function saveContract(event){event.preventDefault();const p=formPayload(event.currentTarget);if(!p.contract_number)p.contract_number=nextContractNumber();['contract_value','enrollment_fee','installment_value'].forEach(k=>p[k]=Number(p[k]||0));p.installments=Number(p.installments||1);p.due_day=p.due_day?Number(p.due_day):null;if(!p.student_id&&!p.company_id)return toast('Selecione um aluno ou empresa contratante.','warning');try{const saved=await one.save('one_contracts',p,state.editing.contracts);if(saved.status==='ativo'){const count=await one.generateContractReceivables(saved.id);if(count)toast(`${count} lançamento(s) financeiro(s) gerado(s) pelo contrato.`)}toast(state.editing.contracts?'Contrato atualizado.':'Contrato registrado.');resetForm('contracts');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveService(event){event.preventDefault();const p=formPayload(event.currentTarget),type=$('#service-entity-type').value,id=$('#service-entity-id').value;if(!id)return toast('Selecione a pessoa ou empresa.','warning');p.student_id=type==='student'?id:null;p.guardian_id=type==='guardian'?id:null;p.company_id=type==='company'?id:null;try{await one.save('one_service_history',p,state.editing.service);if(p.return_at&&p.next_action){await one.save('one_tasks',{title:p.next_action,description:`Retorno de atendimento: ${p.summary}`,due_at:new Date(p.return_at).toISOString(),priority:'normal',status:'pendente',category:'atendimento',assigned_to:state.user.id,entity_type:type,entity_id:id})}toast(state.editing.service?'Atendimento atualizado.':'Atendimento registrado.');resetForm('service');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveReceivable(event){event.preventDefault();const p=formPayload(event.currentTarget);['original_amount','discount_amount','fine_amount','interest_amount'].forEach(k=>p[k]=Number(p[k]||0));p.entry_kind='avulso';if(p.contract_id){const c=state.contracts.find(x=>x.id===p.contract_id);p.student_id=p.student_id||c?.student_id||null;p.guardian_id=c?.guardian_id||null;p.company_id=c?.company_id||null}try{await one.save('one_receivables',p,state.editing.receivables);toast(state.editing.receivables?'Conta atualizada.':'Conta a receber criada.');resetFinanceForm('receivables');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function savePayable(event){event.preventDefault();const p=formPayload(event.currentTarget);p.original_amount=Number(p.original_amount||0);try{await one.save('one_payables',p,state.editing.payables);toast(state.editing.payables?'Despesa atualizada.':'Conta a pagar criada.');resetFinanceForm('payables');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveFinancialAccount(event){event.preventDefault();const p=formPayload(event.currentTarget);p.opening_balance=Number(p.opening_balance||0);p.active=true;try{await one.save('one_financial_accounts',p,state.editing.financialAccounts);toast(state.editing.financialAccounts?'Conta atualizada.':'Conta financeira criada.');resetFinanceForm('financialAccounts');await refreshAll()}catch(e){toast(e.message,'error')}}
+function pickAccount(){const active=state.accounts.filter(x=>x.active);if(!active.length)return null;if(active.length===1)return active[0].id;const text=active.map((a,i)=>`${i+1}. ${a.name}`).join('\n'),n=Number(prompt(`Em qual conta/caixa ocorreu a movimentação?\n${text}`,'1'));return active[n-1]?.id||null}
+async function receiveReceivable(id){const r=state.receivables.find(x=>x.id===id);if(!r)return;const pending=Math.max(0,totalDue(r)-paidForReceivable(id)),amount=Number(prompt('Valor recebido:',pending.toFixed(2).replace('.',','))?.replace(',','.'));if(!amount||amount<=0)return;const method=prompt('Forma de pagamento:','Pix')||'Não informado',accountId=pickAccount();try{await one.save('one_receipts',{receivable_id:id,amount,paid_at:new Date().toISOString(),payment_method:method,account_id:accountId});toast('Recebimento registrado.');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function payPayable(id){const p=state.payables.find(x=>x.id===id);if(!p)return;const pending=Math.max(0,Number(p.original_amount)-paidForPayable(id)),amount=Number(prompt('Valor pago:',pending.toFixed(2).replace('.',','))?.replace(',','.'));if(!amount||amount<=0)return;const method=prompt('Forma de pagamento:','Pix')||'Não informado',accountId=pickAccount();try{await one.save('one_payable_payments',{payable_id:id,amount,paid_at:new Date().toISOString(),payment_method:method,account_id:accountId});toast('Pagamento registrado.');await refreshAll()}catch(e){toast(e.message,'error')}}
+function editFinancial(kind,id){const cfg={receivables:[state.receivables,'receivable-form'],payables:[state.payables,'payable-form'],financialAccounts:[state.accounts,'financial-account-form']}[kind];if(!cfg)return;const row=cfg[0].find(x=>x.id===id),form=$(`#${cfg[1]}`);if(!row||!form)return;state.editing[kind]=id;fillForm(form,row);state.desktop.open('finance')}
+async function deleteFinancial(kind,id){const table={receivables:'one_receivables',payables:'one_payables',financialAccounts:'one_financial_accounts'}[kind];if(!table||!confirm('Excluir este lançamento?'))return;try{await one.remove(table,id);toast('Registro excluído.');await refreshAll()}catch(e){toast(e.message,'error')}}
+function resetFinanceForm(kind){const id={receivables:'receivable-form',payables:'payable-form',financialAccounts:'financial-account-form'}[kind];state.editing[kind]=null;if(id)$(`#${id}`)?.reset()}
+async function saveTask(event){event.preventDefault();const p=formPayload(event.currentTarget);p.due_at=new Date(p.due_at).toISOString();try{await one.save('one_tasks',p,state.editing.tasks);toast(state.editing.tasks?'Tarefa atualizada.':'Tarefa criada.');resetForm('tasks');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function completeTask(id){try{await one.save('one_tasks',{status:'concluida',completed_at:new Date().toISOString()},id);toast('Tarefa concluída.');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function saveDocument(event){event.preventDefault();const p=formPayload(event.currentTarget);if(p.entity_type==='geral')p.entity_id=null;try{await one.save('one_documents',p,state.editing.documents);toast(state.editing.documents?'Documento atualizado.':'Documento registrado.');resetForm('documents');await refreshAll()}catch(e){toast(e.message,'error')}}
+async function generateReceivables(id){try{const count=await one.generateContractReceivables(id);toast(count?`${count} lançamento(s) criado(s).`:'As parcelas desse contrato já estavam geradas.');await refreshAll();state.desktop.open('finance')}catch(e){toast(e.message,'error')}}
+function printContractById(id){const c=state.contracts.find(x=>x.id===id);if(!c)return;const student=c.student?.full_name||'—',contractor=c.guardian?.full_name||c.company?.trade_name||c.company?.legal_name||student,product=c.product?.name||'—',w=window.open('','_blank','width=900,height=800');if(!w)return toast('O navegador bloqueou a janela de impressão.','warning');w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Contrato ${escapeHTML(c.contract_number)}</title><style>body{font:15px Arial;color:#222;max-width:820px;margin:40px auto;line-height:1.55}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:9px;border:1px solid #ddd}.brand{font-weight:900;color:#6d28d9;letter-spacing:2px}.note{background:#f5f3ff;padding:14px;border-radius:8px}.sign{margin-top:70px;display:grid;grid-template-columns:1fr 1fr;gap:50px}.line{border-top:1px solid #333;padding-top:8px;text-align:center}</style></head><body><div class="brand">EVOLUA ONE</div><h1>Ficha Contratual nº ${escapeHTML(c.contract_number)}</h1><p>Documento de conferência gerado pelo sistema. O modelo jurídico oficial da escola pode ser anexado/substituído na Central de Documentos.</p><table><tr><td><b>Aluno</b></td><td>${escapeHTML(student)}</td></tr><tr><td><b>Contratante</b></td><td>${escapeHTML(contractor)}</td></tr><tr><td><b>Produto / plano</b></td><td>${escapeHTML(product)}</td></tr><tr><td><b>Data</b></td><td>${fmtDate(c.contract_date)}</td></tr><tr><td><b>Início</b></td><td>${fmtDate(c.start_date)}</td></tr><tr><td><b>Término</b></td><td>${fmtDate(c.end_date)}</td></tr><tr><td><b>Valor contratado</b></td><td>${money(c.contract_value)}</td></tr><tr><td><b>Matrícula</b></td><td>${money(c.enrollment_fee)}</td></tr><tr><td><b>Parcelas</b></td><td>${c.installments} × ${money(c.installment_value)}</td></tr><tr><td><b>1º vencimento</b></td><td>${fmtDate(c.first_due_date)}</td></tr><tr><td><b>Status</b></td><td>${contractStatus[c.status]||c.status}</td></tr></table><div class="note"><b>Observações</b><br>${escapeHTML(c.notes||'Sem observações.')}</div><div class="sign"><div class="line">Contratante</div><div class="line">Evolua</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()}
+function resetForm(kind){state.editing[kind]=null;const form=$(`#${kind}-form`);form?.reset();const titles={students:'Novo aluno',guardians:'Novo responsável',companies:'Nova empresa',products:'Novo produto ou plano',contracts:'Novo contrato',service:'Novo atendimento',tasks:'Nova tarefa',documents:'Registrar documento'},title=$(`#${kind}-form-title`);if(title)title.textContent=titles[kind];if(kind==='contracts'){$('#contract-number').value=nextContractNumber();$('#contract-date').value=todayISO()}if(kind==='service')updateServiceEntitySelect();if(kind==='documents')updateDocumentEntitySelect()}
+function csvDownload(filename,rows){const esc=v=>`"${String(v??'').replaceAll('"','""')}"`,csv=rows.map(r=>r.map(esc).join(';')).join('\r\n'),blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});downloadBlob(blob,filename)}
+function downloadBlob(blob,filename){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+async function backupNow(){try{const data=await one.backupData(),recordCount=Object.values(data).reduce((n,rows)=>n+rows.length,0),now=new Date(),stamp=`${now.toISOString().slice(0,10)}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`,fileName=`EvoluaOne_Backup_${stamp}.json`,packageData={manifest:{app:'Evolua One',version:VERSION,generated_at:now.toISOString(),workspace_id:state.workspaceId,generated_by:state.user.email,record_count:recordCount},data},blob=new Blob([JSON.stringify(packageData,null,2)],{type:'application/json'});let destination='download';if(window.showSaveFilePicker){try{const handle=await window.showSaveFilePicker({suggestedName:fileName,types:[{description:'Backup Evolua One',accept:{'application/json':['.json']}}]}),writer=await handle.createWritable();await writer.write(blob);await writer.close();destination='Windows / pasta escolhida'}catch(e){if(e.name==='AbortError')return;throw e}}else downloadBlob(blob,fileName);await one.save('one_backup_log',{file_name:fileName,destination,record_count:recordCount,app_version:VERSION});toast(`Backup concluído: ${recordCount} registros.`);await refreshAll()}catch(e){toast(`Falha no backup: ${e.message}`,'error')}}
+function exportSummaryCSV(){csvDownload(`EvoluaOne_Resumo_${todayISO()}.csv`,[['Indicador','Valor'],['Alunos',state.students.length],['Responsáveis',state.guardians.length],['Empresas',state.companies.length],['Produtos',state.products.length],['Contratos',state.contracts.length],['Contas a receber',state.receivables.length],['Recebimentos',state.receipts.length],['Contas a pagar',state.payables.length],['Tarefas',state.tasks.length],['Documentos',state.documents.length]])}
+function exportReportCSV(){csvDownload(`EvoluaOne_Relatorio_${todayISO()}.csv`,[['Área','Indicador','Valor'],['Cadastros','Alunos ativos',state.students.filter(x=>x.status==='ativo').length],['Contratos','Ativos',state.contracts.filter(x=>x.status==='ativo').length],['Financeiro','Recebido total',sum(state.receipts.filter(x=>!x.reversed),x=>x.amount)],['Financeiro','Despesas pagas',sum(state.payablePayments.filter(x=>!x.reversed),x=>x.amount)],['Financeiro','Inadimplência',sum(state.receivables.filter(isOverdue),r=>Math.max(0,totalDue(r)-paidForReceivable(r.id)))],['Agenda','Pendentes',state.tasks.filter(x=>['pendente','em_andamento'].includes(x.status)).length]])}
+function printReport(){const content=$('[data-window="reports"] .window-body').innerHTML,w=window.open('','_blank','width=1000,height=800');if(!w)return toast('O navegador bloqueou a impressão.','warning');w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório Evolua One</title><style>body{font:14px Arial;padding:30px;color:#222}.metric-grid,.report-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.metric-card,.report-card{border:1px solid #ddd;padding:15px;border-radius:10px}.metric-card small,.metric-card strong,.metric-card em{display:block}.metric-card strong{font-size:20px}.report-line{display:flex;justify-content:space-between;padding:7px;border-bottom:1px solid #eee}.panel-head .form-actions{display:none}</style></head><body><h1>Evolua One • Relatório Executivo</h1><p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>${content}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()}
+function bindFormControls(){$('#students-form').addEventListener('submit',saveStudent);$('#guardians-form').addEventListener('submit',saveGuardian);$('#companies-form').addEventListener('submit',saveCompany);$('#products-form').addEventListener('submit',saveProduct);$('#contracts-form').addEventListener('submit',saveContract);$('#service-form').addEventListener('submit',saveService);$('#receivable-form').addEventListener('submit',saveReceivable);$('#payable-form').addEventListener('submit',savePayable);$('#financial-account-form').addEventListener('submit',saveFinancialAccount);$('#tasks-form').addEventListener('submit',saveTask);$('#documents-form').addEventListener('submit',saveDocument);$('#student-save-contract').addEventListener('click',()=>{$('#students-form').dataset.advance='contract';$('#students-form').requestSubmit()});$$('[data-reset-form]').forEach(b=>b.addEventListener('click',()=>resetForm(b.dataset.resetForm)));$$('[data-mask="cpf"]').forEach(i=>i.addEventListener('input',()=>i.value=formatCPF(i.value)));$$('[data-mask="cnpj"]').forEach(i=>i.addEventListener('input',()=>i.value=formatCNPJ(i.value)));$$('[data-mask="cep"]').forEach(i=>i.addEventListener('input',()=>i.value=formatCEP(i.value)));$$('[data-mask="phone"]').forEach(i=>i.addEventListener('input',()=>i.value=formatPhone(i.value)));$('#student-cep').addEventListener('change',()=>fetchCEP($('#student-cep'),'#student-city','#student-state'));$('#guardian-cep').addEventListener('change',()=>fetchCEP($('#guardian-cep'),'#guardian-city','#guardian-state'));$('#company-cep').addEventListener('change',()=>fetchCEP($('#company-cep'),'#company-city','#company-state'));$('#contract-product-id').addEventListener('change',()=>{const p=state.products.find(x=>x.id===$('#contract-product-id').value);if(!p)return;$('#contract-value').value=Number(p.list_price||0).toFixed(2);$('#contract-enrollment-fee').value=Number(p.enrollment_fee||0).toFixed(2);$('#contract-installments').value=p.max_installments||1;const n=Number(p.max_installments||1);$('#contract-installment-value').value=(Number(p.list_price||0)/n).toFixed(2);if(!$('#contract-first-due-date').value)$('#contract-first-due-date').value=todayISO()});$('#contract-print-button').addEventListener('click',()=>{if(state.editing.contracts)printContractById(state.editing.contracts);else toast('Salve o contrato primeiro. Depois use o botão Ficha na lista.','warning')});$('#service-entity-type').addEventListener('change',updateServiceEntitySelect);$('#document-entity-type').addEventListener('change',updateDocumentEntitySelect);$('#finance-refresh').addEventListener('click',async()=>{await refreshAll();toast('Financeiro atualizado.')});$('#member-add-form').addEventListener('submit',async e=>{e.preventDefault();const p=formPayload(e.currentTarget);try{await one.addExistingMember(p.email,p.role);toast('Usuário vinculado ao Evolua One.');e.currentTarget.reset();await refreshAll()}catch(err){toast(err.message,'error')}});$('#backup-now').addEventListener('click',backupNow);$('#backup-export-csv').addEventListener('click',exportSummaryCSV);$('#reports-export-csv').addEventListener('click',exportReportCSV);$('#reports-print').addEventListener('click',printReport)}
+function bindDesktop(){const desktop=new DesktopManager({desktop:$('#desktop-canvas'),taskbarApps:$('#taskbar-apps'),startMenu:$('#start-menu')});state.desktop=desktop;[['cadastros','Cadastros','🗂️'],['students','Alunos','👨‍🎓'],['guardians','Responsáveis','👨‍👩‍👧'],['companies','Empresas','🏢'],['products','Produtos e Planos','📦'],['contracts','Gestão do Aluno e Contratos','📄'],['service','Histórico de Atendimento','💬'],['commercial','Comercial','🎯'],['finance','Financeiro','💰'],['agenda','Agenda e Tarefas','🗓️'],['documents','Documentos','🗃️'],['reports','Relatórios','📊'],['admin','Administração','⚙️']].forEach(([id,title,icon])=>desktop.register(id,{title,icon}));$$('[data-open-window]').forEach(b=>b.addEventListener('click',()=>desktop.open(b.dataset.openWindow)));$('#start-button').addEventListener('click',e=>{e.stopPropagation();$('#start-menu').classList.toggle('hidden')});document.addEventListener('click',e=>{if(!e.target.closest('#start-menu')&&!e.target.closest('#start-button'))$('#start-menu').classList.add('hidden')});$('#commercial-frame').src=CRM_URL;$('#open-crm-new-tab').href=CRM_URL}
+function bindClock(){const tick=()=>{const n=new Date();$('#clock-time').textContent=n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});$('#clock-date').textContent=n.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})};tick();setInterval(tick,30000)}
+async function init(){document.title=APP_NAME;bindDesktop();bindFormControls();bindClock();['contracts','service','tasks','documents'].forEach(resetForm);$('#login-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('#login-button');b.disabled=true;b.textContent='Entrando...';const{data,error}=await supabase.auth.signInWithPassword({email:$('#login-email').value.trim(),password:$('#login-password').value});b.disabled=false;b.textContent='Entrar no Evolua One';if(error)return toast('E-mail ou senha inválidos.','error');if(data.user)await enterApp(data.user)});$('#logout-button').addEventListener('click',async()=>{await supabase.auth.signOut();showLogin()});$('#refresh-button').addEventListener('click',async()=>{try{await refreshAll();toast('Dados atualizados.')}catch(e){toast(e.message,'error')}});const{data:{session}}=await supabase.auth.getSession();if(session?.user)await enterApp(session.user);else showLogin();supabase.auth.onAuthStateChange(async(event,s)=>{if(event==='SIGNED_OUT')showLogin();if(event==='SIGNED_IN'&&s?.user&&state.user?.id!==s.user.id)await enterApp(s.user)})}
 init();
